@@ -30,6 +30,8 @@ import {
 } from 'lucide-react';
 import LocationAutocomplete from '../components/LocationAutocomplete';
 import MapDisplay from '../components/MapDisplay';
+import { supabase } from '../services/supabaseClient';
+
 
 // Helper: Geocode location name to coords via Nominatim
 const geocodeLocation = async (address) => {
@@ -188,6 +190,32 @@ export default function EmployeeDashboard() {
     loadRides();
     loadHistory();
   }, [activeTab]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('employee-db-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'rides' },
+        () => {
+          loadRides();
+          loadHistory();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'bookings' },
+        () => {
+          loadRides();
+          loadHistory();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   const showMsg = (msg, isError = false) => {
     if (isError) setError(msg);

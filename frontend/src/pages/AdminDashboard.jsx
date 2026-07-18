@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getOrganizationRidesReport } from '../services/api';
 import { Building2, Users, Settings, Sliders, BarChart3, ShieldCheck, Car, DollarSign, Calendar, MapPin } from 'lucide-react';
+import { supabase } from '../services/supabaseClient';
+
 
 export default function AdminDashboard() {
   const { user } = useAuth();
@@ -10,6 +12,30 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     loadReports();
+  }, []);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('admin-db-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'rides' },
+        () => {
+          loadReports();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'bookings' },
+        () => {
+          loadReports();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const loadReports = async () => {
