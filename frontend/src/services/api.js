@@ -1,4 +1,6 @@
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  ? 'http://localhost:5000/api'
+  : `http://${window.location.hostname}:5000/api`;
 
 async function request(endpoint, options = {}) {
   const headers = {
@@ -58,6 +60,8 @@ export async function startRide(rideId) { return request(`/rides/${rideId}/start
 // Wallet & Payments
 export async function getWalletBalance() { return request('/wallet/balance'); }
 export async function rechargeWallet(amount) { return request('/wallet/recharge', { method: 'POST', body: JSON.stringify({ amount }) }); }
+export async function createRechargeOrder(amount) { return request('/wallet/recharge/order', { method: 'POST', body: JSON.stringify({ amount }) }); }
+export async function verifyRechargePayment(paymentDetails) { return request('/wallet/recharge/verify', { method: 'POST', body: JSON.stringify(paymentDetails) }); }
 export async function payBooking(bookingId, method) { return request('/wallet/pay', { method: 'POST', body: JSON.stringify({ bookingId, method }) }); }
 export async function getUnpaidBookings() { return request('/wallet/unpaid-bookings'); }
 

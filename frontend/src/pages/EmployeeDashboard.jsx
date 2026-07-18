@@ -13,8 +13,9 @@ import {
   getWalletBalance,
   rechargeWallet,
   getUnpaidBookings,
+  createRechargeOrder,
+  verifyRechargePayment,
   getRideMessages,
-  payBooking,
 } from "../services/api";
 import {
   Car,
@@ -304,6 +305,16 @@ export default function EmployeeDashboard() {
     if (activeTab === "payment") { loadUnpaidBookings(); loadWalletData(); }
   }, [activeTab]);
 
+  // Load Razorpay SDK
+  useEffect(() => {
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    document.body.appendChild(script);
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, []);
 
   useEffect(() => {
     const channel = supabase
@@ -391,14 +402,78 @@ export default function EmployeeDashboard() {
     if (!parsed || parsed <= 0) { showMsg("Please enter a valid amount", true); return; }
     setWalletLoading(true);
     try {
-      const res = await rechargeWallet(parsed);
-      setWalletBalance(parseFloat(res.balance));
-      showMsg(`✅ Wallet recharged with $${parsed.toFixed(2)}!`);
-      setRechargeAmount("");
-      loadWalletData();
+      // 1. Create Razorpay order on backend
+      const orderData = await createRechargeOrder(parsed);
+
+      // 2. Setup Razorpay Checkout options
+      const options = {
+        key: orderData.keyId,
+        amount: orderData.amount,
+        currency: orderData.currency,
+        name: "EcoDrive Wallet",
+        description: `Wallet Recharge: $${parsed.toFixed(2)}`,
+        order_id: orderData.orderId,
+        handler: async function (response) {
+          // 3. Verify payment signature on backend
+          setWalletLoading(true);
+          try {
+            const verificationData = {
+              amount: parsed,
+              razorpayPaymentId: response.razorpay_payment_id,
+              razorpayOrderId: response.razorpay_order_id,
+              razorpaySignature: response.razorpay_signature,
+              isSimulation: orderData.isSimulation
+            };
+
+            const verificationResult = await verifyRechargePayment(verificationData);
+            setWalletBalance(parseFloat(verificationResult.balance));
+            showMsg(`✅ Wallet recharged successfully with $${parsed.toFixed(2)}!`);
+            setRechargeAmount("");
+            loadWalletData();
+          } catch (verifyErr) {
+            showMsg(verifyErr.message || "Payment verification failed.", true);
+          } finally {
+            setWalletLoading(false);
+          }
+        },
+        prefill: {
+          name: user?.fullName || "",
+          email: user?.email || "",
+          contact: user?.phone || ""
+        },
+        theme: {
+          color: "#71639e" // Odoo Violet theme style
+        },
+        modal: {
+          ondismiss: function () {
+            setWalletLoading(false);
+          }
+        }
+      };
+
+      // 3. Open Razorpay checkout
+      if (orderData.isSimulation) {
+        const proceedSim = window.confirm(
+          `Razorpay keys are not configured yet (Simulation Mode).\n\nRecharge Amount: $${parsed.toFixed(2)}\nOrder ID: ${orderData.orderId}\n\nWould you like to simulate a successful payment?`
+        );
+        if (proceedSim) {
+          options.handler({
+            razorpay_payment_id: `pay_sim_${Date.now()}`,
+            razorpay_order_id: orderData.orderId,
+            razorpay_signature: "simulated_signature"
+          });
+        } else {
+          setWalletLoading(false);
+        }
+      } else {
+        if (!window.Razorpay) {
+          throw new Error("Razorpay SDK failed to load. Please check your internet connection.");
+        }
+        const rzp = new window.Razorpay(options);
+        rzp.open();
+      }
     } catch (err) {
-      showMsg(err.message, true);
-    } finally {
+      showMsg(err.message || "Failed to initiate recharge order.", true);
       setWalletLoading(false);
     }
   };
@@ -1136,7 +1211,7 @@ export default function EmployeeDashboard() {
                                 />
                                 {bookingParams.seats !== "" &&
                                   bookingParams.seats >
-                                    ride.available_seats && (
+                                  ride.available_seats && (
                                     <span
                                       style={{
                                         color: "#dc3545",
@@ -1230,7 +1305,7 @@ export default function EmployeeDashboard() {
                                     bookingParams.distanceKm === null ||
                                     bookingParams.seats === "" ||
                                     bookingParams.seats >
-                                      ride.available_seats ||
+                                    ride.available_seats ||
                                     bookingParams.seats < 1
                                   }
                                 >
@@ -1260,9 +1335,9 @@ export default function EmployeeDashboard() {
                                 requestCoords={
                                   bookingParams.pickupLat
                                     ? {
-                                        lat: bookingParams.pickupLat,
-                                        lon: bookingParams.pickupLon,
-                                      }
+                                      lat: bookingParams.pickupLat,
+                                      lon: bookingParams.pickupLon,
+                                    }
                                     : null
                                 }
                                 height="280px"
@@ -1287,7 +1362,7 @@ export default function EmployeeDashboard() {
             </h3>
 
             {activeDriverRides.length === 0 &&
-            activePassengerRides.length === 0 ? (
+              activePassengerRides.length === 0 ? (
               <div
                 style={{
                   textAlign: "center",
@@ -1515,6 +1590,15 @@ export default function EmployeeDashboard() {
                                       >
                                         ({rider.passenger_phone})
                                       </span>
+                                      {rider.payment_status === "Paid" ? (
+                                        <span style={{ marginLeft: "8px", padding: "1px 6px", borderRadius: "4px", background: "#d4edda", color: "#155724", fontSize: "0.75rem", fontWeight: 700 }}>
+                                          Paid via {rider.payment_method}
+                                        </span>
+                                      ) : (
+                                        <span style={{ marginLeft: "8px", padding: "1px 6px", borderRadius: "4px", background: "#fff3cd", color: "#856404", fontSize: "0.75rem", fontWeight: 700 }}>
+                                          Unpaid
+                                        </span>
+                                      )}
                                       <div
                                         style={{
                                           fontSize: "0.85rem",
@@ -1748,11 +1832,11 @@ export default function EmployeeDashboard() {
                             requestCoords={
                               activeRequest
                                 ? {
-                                    lat: parseFloat(activeRequest.pickup_lat),
-                                    lon: parseFloat(activeRequest.pickup_lon),
-                                    passenger_name: activeRequest.passenger_name,
-                                    pickup_location: activeRequest.pickup_location,
-                                  }
+                                  lat: parseFloat(activeRequest.pickup_lat),
+                                  lon: parseFloat(activeRequest.pickup_lon),
+                                  passenger_name: activeRequest.passenger_name,
+                                  pickup_location: activeRequest.pickup_location,
+                                }
                                 : null
                             }
                             vehicleCoords={vehicleLiveCoords[ride.id] || null}
@@ -1881,6 +1965,46 @@ export default function EmployeeDashboard() {
                               Communicate
                             </button>
                           )}
+                          {isConfirmed && ride.payment_status !== "Paid" && (
+                            <button
+                              className="btn btn-primary animate-pulse"
+                              style={{
+                                fontSize: "0.85rem",
+                                padding: "0.5rem 1rem",
+                                background: "var(--odoo-violet)",
+                                border: "1px solid var(--odoo-violet)",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "0.4rem",
+                                marginLeft: "8px"
+                              }}
+                              onClick={() => setSelectedPayBooking({
+                                booking_id: ride.booking_id,
+                                pickup_location: ride.pickup_location,
+                                destination: ride.destination,
+                                driver_name: ride.driver_name,
+                                fare: ride.my_fare
+                              })}
+                            >
+                              <CreditCard size={14} /> Pay (${Number(ride.my_fare).toFixed(2)})
+                            </button>
+                          )}
+                          {isConfirmed && ride.payment_status === "Paid" && (
+                            <span
+                              style={{
+                                fontSize: "0.85rem",
+                                fontWeight: 700,
+                                color: "#2b8a3e",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "0.25rem",
+                                padding: "0.5rem",
+                                marginLeft: "8px"
+                              }}
+                            >
+                              ✅ Paid via {ride.payment_method}
+                            </span>
+                          )}
                         </div>
                       </div>
 
@@ -1987,7 +2111,7 @@ export default function EmployeeDashboard() {
                                 Other Confirmed Passenger(s) sharing this ride:
                               </h6>
                               {ride.other_riders &&
-                              ride.other_riders.length > 0 ? (
+                                ride.other_riders.length > 0 ? (
                                 <ul
                                   style={{
                                     listStyleType: "disc",
@@ -2042,21 +2166,21 @@ export default function EmployeeDashboard() {
                               })),
                               isConfirmed
                                 ? {
-                                    lat: parseFloat(ride.my_pickup_lat),
-                                    lon: parseFloat(ride.my_pickup_lon),
-                                    passenger_name: "You",
-                                    pickup_location: ride.my_pickup_location,
-                                  }
+                                  lat: parseFloat(ride.my_pickup_lat),
+                                  lon: parseFloat(ride.my_pickup_lon),
+                                  passenger_name: "You",
+                                  pickup_location: ride.my_pickup_location,
+                                }
                                 : null,
                             ].filter((p) => p && p.lat && p.lon)}
                             requestCoords={
                               !isConfirmed
                                 ? {
-                                    lat: parseFloat(ride.my_pickup_lat),
-                                    lon: parseFloat(ride.my_pickup_lon),
-                                    passenger_name: "You (Pending Request)",
-                                    pickup_location: ride.my_pickup_location,
-                                  }
+                                  lat: parseFloat(ride.my_pickup_lat),
+                                  lon: parseFloat(ride.my_pickup_lon),
+                                  passenger_name: "You (Pending Request)",
+                                  pickup_location: ride.my_pickup_location,
+                                }
                                 : null
                             }
                             vehicleCoords={vehicleLiveCoords[ride.id] || null}
@@ -2280,17 +2404,17 @@ export default function EmployeeDashboard() {
                       startCoords={
                         offerForm.pickupLat
                           ? {
-                              lat: offerForm.pickupLat,
-                              lon: offerForm.pickupLon,
-                            }
+                            lat: offerForm.pickupLat,
+                            lon: offerForm.pickupLon,
+                          }
                           : null
                       }
                       endCoords={
                         offerForm.destinationLat
                           ? {
-                              lat: offerForm.destinationLat,
-                              lon: offerForm.destinationLon,
-                            }
+                            lat: offerForm.destinationLat,
+                            lon: offerForm.destinationLon,
+                          }
                           : null
                       }
                       height="380px"
@@ -2361,12 +2485,12 @@ export default function EmployeeDashboard() {
                             style={{
                               background:
                                 ride.booking_status === "Declined" ||
-                                ride.booking_status === "Cancelled"
+                                  ride.booking_status === "Cancelled"
                                   ? "#f8d7da"
                                   : "",
                               color:
                                 ride.booking_status === "Declined" ||
-                                ride.booking_status === "Cancelled"
+                                  ride.booking_status === "Cancelled"
                                   ? "#721c24"
                                   : "",
                             }}
@@ -2374,6 +2498,19 @@ export default function EmployeeDashboard() {
                             {ride.booking_status}{" "}
                             {ride.cancellation_reason &&
                               `(Reason: ${ride.cancellation_reason})`}
+                          </span>
+                        )}
+                        {ride.user_role === "Passenger" && ride.booking_status === "Confirmed" && (
+                          <span
+                            className="odoo-badge"
+                            style={{
+                              background: ride.payment_status === "Paid" ? "#d4edda" : "#fff3cd",
+                              color: ride.payment_status === "Paid" ? "#155724" : "#856404",
+                              borderColor: ride.payment_status === "Paid" ? "#c3e6cb" : "#ffeeba",
+                              marginLeft: "8px"
+                            }}
+                          >
+                            {ride.payment_status === "Paid" ? `Paid via ${ride.payment_method}` : "Unpaid"}
                           </span>
                         )}
                       </div>
@@ -2401,6 +2538,34 @@ export default function EmployeeDashboard() {
                       >
                         Details
                       </button>
+                      {ride.user_role === "Passenger" &&
+                        ride.booking_status === "Confirmed" &&
+                        ride.payment_status !== "Paid" && (
+                          <button
+                            className="btn btn-primary"
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "6px",
+                              fontSize: "0.85rem",
+                              padding: "0.5rem 1rem",
+                              background: "var(--odoo-violet)",
+                              border: "1px solid var(--odoo-violet)"
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedPayBooking({
+                                booking_id: ride.booking_id,
+                                pickup_location: ride.pickup_location,
+                                destination: ride.destination,
+                                driver_name: ride.driver_name,
+                                fare: ride.my_fare
+                              });
+                            }}
+                          >
+                            <CreditCard size={14} /> Pay (${Number(ride.my_fare).toFixed(2)})
+                          </button>
+                        )}
                       {((ride.user_role === "Driver" &&
                         (ride.status === "Open" ||
                           ride.status === "In Progress")) ||
@@ -2408,20 +2573,20 @@ export default function EmployeeDashboard() {
                           ride.booking_status === "Confirmed" &&
                           (ride.status === "Open" ||
                             ride.status === "In Progress"))) && (
-                        <button
-                          className="btn btn-teal"
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "6px",
-                            fontSize: "0.85rem",
-                            padding: "0.5rem 1rem",
-                          }}
-                          onClick={() => handleOpenCommHub(ride)}
-                        >
-                          Communicate
-                        </button>
-                      )}
+                          <button
+                            className="btn btn-teal"
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "6px",
+                              fontSize: "0.85rem",
+                              padding: "0.5rem 1rem",
+                            }}
+                            onClick={() => handleOpenCommHub(ride)}
+                          >
+                            Communicate
+                          </button>
+                        )}
                     </div>
                   </div>
                 ))}
@@ -2472,11 +2637,11 @@ export default function EmployeeDashboard() {
                     )}
                     <div><b>Date & Time:</b> {new Date(selectedHistoryRide.departure_date).toLocaleDateString()} at {selectedHistoryRide.departure_time}</div>
                     <div><b>Per Seat Charge:</b> ${Number(selectedHistoryRide.fare_per_seat).toFixed(2)}</div>
-                    
+
                     <div style={{ marginTop: "0.5rem", paddingTop: "0.5rem", borderTop: "1px solid var(--border-color)" }}>
-                      <b>Total Charge:</b> 
+                      <b>Total Charge:</b>
                       <span style={{ marginLeft: "0.5rem", color: "var(--odoo-teal)", fontWeight: 800, fontSize: "1.1rem" }}>
-                        ${selectedHistoryRide.user_role === "Passenger" 
+                        ${selectedHistoryRide.user_role === "Passenger"
                           ? Number(selectedHistoryRide.my_fare).toFixed(2)
                           : (Number(selectedHistoryRide.fare_per_seat) * (selectedHistoryRide.bookings ? selectedHistoryRide.bookings.reduce((sum, b) => sum + b.seats_booked, 0) : 0)).toFixed(2)}
                       </span>
@@ -2484,10 +2649,10 @@ export default function EmployeeDashboard() {
 
                     {selectedHistoryRide.user_role === "Passenger" && selectedHistoryRide.payment_status && (
                       <div style={{ marginTop: "0.5rem" }}>
-                        <b>Payment Status:</b> 
-                        <span style={{ 
-                          marginLeft: "0.5rem", 
-                          padding: "2px 8px", 
+                        <b>Payment Status:</b>
+                        <span style={{
+                          marginLeft: "0.5rem",
+                          padding: "2px 8px",
                           borderRadius: "4px",
                           background: selectedHistoryRide.payment_status === "Paid" ? "#d4edda" : "#f8d7da",
                           color: selectedHistoryRide.payment_status === "Paid" ? "#155724" : "#721c24",
@@ -2498,25 +2663,26 @@ export default function EmployeeDashboard() {
                       </div>
                     )}
 
-                    {selectedHistoryRide.user_role === "Passenger" && 
-                     selectedHistoryRide.payment_status === "Unpaid" && 
-                     (selectedHistoryRide.status === "Completed" || selectedHistoryRide.status === "In Progress" || selectedHistoryRide.booking_status === "Confirmed") && (
-                      <button 
-                        className="btn btn-primary" 
-                        style={{ marginTop: "1rem", padding: "0.75rem", width: "100%", fontWeight: "bold" }}
-                        onClick={() => {
-                          // The `unpaidBookings` is loaded from wallet backend, which returns `booking_id`, `fare`, etc.
-                          // But we can just use `selectedHistoryRide` if it has everything needed for payment processing.
-                          // The Payment tab expects an object with `booking_id`, `fare`, `pickup_location`, `destination`, `driver_name`.
-                          // `selectedHistoryRide` has all these.
-                          setSelectedPayBooking(selectedHistoryRide);
-                          setSelectedHistoryRide(null);
-                          setActiveTab("payment");
-                        }}
-                      >
-                        Pay Now
-                      </button>
-                    )}
+                    {selectedHistoryRide.user_role === "Passenger" &&
+                      selectedHistoryRide.payment_status === "Unpaid" &&
+                      (selectedHistoryRide.status === "Completed" || selectedHistoryRide.status === "In Progress" || selectedHistoryRide.booking_status === "Confirmed") && (
+                        <button
+                          className="btn btn-primary"
+                          style={{ marginTop: "1rem", padding: "0.75rem", width: "100%", fontWeight: "bold" }}
+                          onClick={() => {
+                            setSelectedPayBooking({
+                              booking_id: selectedHistoryRide.booking_id,
+                              pickup_location: selectedHistoryRide.my_pickup_location || selectedHistoryRide.pickup_location,
+                              destination: selectedHistoryRide.destination,
+                              driver_name: selectedHistoryRide.driver_name,
+                              fare: selectedHistoryRide.my_fare
+                            });
+                            setSelectedHistoryRide(null);
+                          }}
+                        >
+                          Pay Now
+                        </button>
+                      )}
                   </div>
                 </div>
               </div>
@@ -2915,6 +3081,48 @@ export default function EmployeeDashboard() {
               </div>
 
 
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                  {!isInVoiceCall ? (
+                    <button
+                      className="btn btn-teal"
+                      style={{ flex: 1, padding: "0.6rem", fontSize: "0.85rem" }}
+                      onClick={handleJoinVoiceCall}
+                    >
+                      🔊 Join Voice Call
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        className="btn btn-outline"
+                        style={{
+                          flex: 1,
+                          padding: "0.6rem",
+                          fontSize: "0.85rem",
+                          color: isMuted ? "#37b24d" : "#e67e22",
+                          borderColor: isMuted ? "#37b24d" : "#e67e22"
+                        }}
+                        onClick={handleToggleMute}
+                      >
+                        {isMuted ? "🎙️ Unmute Mic" : "🔇 Mute Mic"}
+                      </button>
+                      <button
+                        className="btn"
+                        style={{
+                          flex: 1,
+                          padding: "0.6rem",
+                          fontSize: "0.85rem",
+                          background: "#fa5252",
+                          color: "white",
+                          border: "none"
+                        }}
+                        onClick={handleLeaveVoiceCall}
+                      >
+                        🔴 Leave Call
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
 
               {/* Chat Area */}
               <div
@@ -3019,6 +3227,106 @@ export default function EmployeeDashboard() {
                   </button>
                 </form>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Reusable Payment Checkout Modal for other tabs */}
+        {selectedPayBooking && activeTab !== "payment" && (
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: "rgba(0, 0, 0, 0.5)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 1050,
+            }}
+          >
+            <div
+              className="odoo-card"
+              style={{
+                width: "450px",
+                maxWidth: "90%",
+                padding: "2rem",
+                borderRadius: "12px",
+                background: "white"
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
+                <h4 style={{ margin: 0, color: "var(--odoo-violet)" }}>Checkout</h4>
+                <button className="btn btn-outline" style={{ padding: "0.2rem 0.5rem" }} onClick={() => setSelectedPayBooking(null)}>X</button>
+              </div>
+
+              {/* Selected ride summary */}
+              <div style={{ background: "#f8f9fa", borderRadius: "10px", padding: "1rem", marginBottom: "1.25rem", borderLeft: "4px solid var(--odoo-violet)" }}>
+                <div style={{ fontWeight: 700 }}>{selectedPayBooking.pickup_location || selectedPayBooking.my_pickup_location} → {selectedPayBooking.destination}</div>
+                <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "4px" }}>Driver: {selectedPayBooking.driver_name}</div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginTop: "8px", fontWeight: 800 }}>
+                  <span>Amount Due</span>
+                  <span style={{ color: "var(--odoo-teal)", fontSize: "1.2rem" }}>${Number(selectedPayBooking.fare || selectedPayBooking.my_fare).toFixed(2)}</span>
+                </div>
+              </div>
+
+              {/* Payment Method */}
+              <label style={{ fontWeight: 600, marginBottom: "0.5rem", display: "block" }}>Select Payment Method</label>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.6rem", marginBottom: "1.25rem" }}>
+                {["Cash", "Card", "UPI", "Wallet"].map(m => (
+                  <button
+                    key={m}
+                    onClick={() => setPaymentMethod(m)}
+                    style={{ padding: "0.75rem", borderRadius: "10px", border: `2px solid ${paymentMethod === m ? "var(--odoo-violet)" : "var(--border-color)"}`, background: paymentMethod === m ? "#f3f0ff" : "white", fontWeight: 600, color: paymentMethod === m ? "var(--odoo-violet)" : "#495057", cursor: "pointer", transition: "all 0.15s", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.4rem" }}
+                  >
+                    {m === "Cash" && "💵"}{m === "Card" && "💳"}{m === "UPI" && "📱"}{m === "Wallet" && "👛"} {m}
+                  </button>
+                ))}
+              </div>
+
+              {/* Wallet balance info */}
+              {paymentMethod === "Wallet" && (
+                <div style={{ marginBottom: "1rem", padding: "0.75rem 1rem", borderRadius: "8px", background: walletBalance >= Number(selectedPayBooking.fare || selectedPayBooking.my_fare) ? "#f0fff4" : "#fff5f5", border: `1px solid ${walletBalance >= Number(selectedPayBooking.fare || selectedPayBooking.my_fare) ? "#b2f2bb" : "#ffc9c9"}`, fontSize: "0.88rem" }}>
+                  <div style={{ fontWeight: 600, color: walletBalance >= Number(selectedPayBooking.fare || selectedPayBooking.my_fare) ? "#2b8a3e" : "#c92a2a" }}>
+                    {walletBalance >= Number(selectedPayBooking.fare || selectedPayBooking.my_fare)
+                      ? `✅ Sufficient balance ($${walletBalance.toFixed(2)} available)`
+                      : `❌ Insufficient balance ($${walletBalance.toFixed(2)} available, need $${Number(selectedPayBooking.fare || selectedPayBooking.my_fare).toFixed(2)})`}
+                  </div>
+                  {walletBalance < Number(selectedPayBooking.fare || selectedPayBooking.my_fare) && (
+                    <button className="btn btn-outline" style={{ marginTop: "0.5rem", fontSize: "0.8rem", padding: "0.35rem 0.75rem" }} onClick={() => { setActiveTab("wallet"); setSelectedPayBooking(null); }}>
+                      Top up wallet →
+                    </button>
+                  )}
+                </div>
+              )}
+
+              <button
+                className="btn btn-primary"
+                style={{ width: "100%", padding: "0.85rem", borderRadius: "10px", fontWeight: 700, fontSize: "1rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}
+                onClick={async () => {
+                  setPaymentLoading(true);
+                  try {
+                    const res = await payBooking(selectedPayBooking.booking_id, paymentMethod);
+                    showMsg(`✅ ${res.message}`);
+                    setSelectedPayBooking(null);
+                    loadHistory();
+                    loadUnpaidBookings();
+                    if (paymentMethod === "Wallet") loadWalletData();
+                  } catch (err) {
+                    showMsg(err.message, true);
+                  } finally {
+                    setPaymentLoading(false);
+                  }
+                }}
+                disabled={paymentLoading || (paymentMethod === "Wallet" && walletBalance < Number(selectedPayBooking.fare || selectedPayBooking.my_fare))}
+              >
+                <CreditCard size={18} /> {paymentLoading ? "Processing..." : `Pay $${Number(selectedPayBooking.fare || selectedPayBooking.my_fare).toFixed(2)} via ${paymentMethod}`}
+              </button>
+              <button className="btn btn-outline" style={{ width: "100%", marginTop: "0.5rem", padding: "0.6rem" }} onClick={() => setSelectedPayBooking(null)}>
+                Cancel
+              </button>
             </div>
           </div>
         )}
