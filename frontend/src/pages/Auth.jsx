@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getOrganizations, createOrganization, loginUser, registerUser } from '../services/api';
-import { Building2, User, Mail, Lock, Phone, CreditCard, ArrowRight, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { Building2, User, Mail, ArrowRight, CheckCircle2, ShieldAlert } from 'lucide-react';
 
 export default function Auth({ onNavigate }) {
   const { login } = useAuth();
@@ -27,20 +27,19 @@ export default function Auth({ onNavigate }) {
   const [newOrgCode, setNewOrgCode] = useState('');
 
   useEffect(() => {
-    fetchOrgs();
-  }, []);
-
-  async function fetchOrgs() {
-    try {
-      const orgs = await getOrganizations();
-      setOrganizations(orgs);
-      if (orgs.length > 0 && !selectedOrgId) {
-        setSelectedOrgId(orgs[0].id);
+    async function fetchOrgs() {
+      try {
+        const orgs = await getOrganizations();
+        setOrganizations(orgs);
+        if (orgs.length > 0 && !selectedOrgId) {
+          setSelectedOrgId(orgs[0].id);
+        }
+      } catch (err) {
+        console.error('Failed to load organizations:', err);
       }
-    } catch (err) {
-      console.error('Error loading organizations:', err);
     }
-  }
+    fetchOrgs();
+  }, [selectedOrgId]);
 
   const handleOrgChange = (e) => {
     if (e.target.value === 'NEW') {

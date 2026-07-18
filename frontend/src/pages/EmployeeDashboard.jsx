@@ -12,7 +12,6 @@ import {
   startRide,
   getWalletBalance,
   rechargeWallet,
-  payBooking,
   getUnpaidBookings,
   createRechargeOrder,
   verifyRechargePayment,
@@ -22,10 +21,8 @@ import {
   Car,
   Search,
   PlusCircle,
-  MapPin,
   Calendar,
   Clock,
-  DollarSign,
   Users,
   ShieldCheck,
   Navigation,
@@ -116,82 +113,7 @@ export default function EmployeeDashboard() {
   const [chatMessages, setChatMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
 
-  // WebRTC refs and states
-  const peerConnectionsRef = useRef({});
-  const localStreamRef = useRef(null);
-  const [incomingCallAlert, setIncomingCallAlert] = useState(null);
-  const [isInVoiceCall, setIsInVoiceCall] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
-
-  const handleJoinVoiceCall = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-      localStreamRef.current = stream;
-      setIsInVoiceCall(true);
-      setIsMuted(false);
-
-      if (socket && activeCommRide) {
-        socket.emit("join_voice_call", {
-          rideId: activeCommRide.id,
-          userId: user.id,
-          userName: user.fullName
-        });
-        socket.emit("initiate_call", {
-          rideId: activeCommRide.id,
-          callerName: user.fullName
-        });
-      }
-    } catch (err) {
-      console.error("Microphone access failed:", err);
-      alert("Could not access microphone for live call. Please verify permissions.");
-    }
-  };
-
-  const handleLeaveVoiceCall = () => {
-    if (socket && activeCommRide) {
-      socket.emit("leave_voice_call", { rideId: activeCommRide.id });
-    }
-
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach(track => track.stop());
-      localStreamRef.current = null;
-    }
-
-    Object.keys(peerConnectionsRef.current).forEach(socketId => {
-      peerConnectionsRef.current[socketId].close();
-      removeRemoteAudio(socketId);
-    });
-    peerConnectionsRef.current = {};
-    setIsInVoiceCall(false);
-  };
-
-  const handleToggleMute = () => {
-    if (localStreamRef.current) {
-      const enabled = isMuted;
-      localStreamRef.current.getAudioTracks().forEach(track => track.enabled = enabled);
-      setIsMuted(!isMuted);
-    }
-  };
-
-  const addRemoteAudio = (socketId, stream) => {
-    let audioEl = document.getElementById(`audio_${socketId}`);
-    if (!audioEl) {
-      audioEl = document.createElement("audio");
-      audioEl.id = `audio_${socketId}`;
-      audioEl.autoplay = true;
-      audioEl.style.display = "none";
-      document.body.appendChild(audioEl);
-    }
-    audioEl.srcObject = stream;
-  };
-
-  const removeRemoteAudio = (socketId) => {
-    const audioEl = document.getElementById(`audio_${socketId}`);
-    if (audioEl) {
-      audioEl.srcObject = null;
-      audioEl.remove();
-    }
-  };
+  // WebRTC voice call logic has been removed as per user request
 
   const handleOpenCommHub = async (ride) => {
     setActiveCommRide(ride);
@@ -199,6 +121,7 @@ export default function EmployeeDashboard() {
       const messages = await getRideMessages(ride.id);
       setChatMessages(messages);
     } catch (e) {
+      console.error('Failed to fetch chat messages:', e);
       setChatMessages([]);
     }
 
@@ -218,108 +141,13 @@ export default function EmployeeDashboard() {
       setChatMessages((prev) => [...prev, msg]);
     });
 
-    s.on("incoming_call", ({ callerName }) => {
-      setIncomingCallAlert(callerName);
-    });
-
     // Passenger receives live vehicle location from driver
     s.on("location_updated", ({ lat, lon, eta }) => {
       setVehicleLiveCoords(prev => ({ ...prev, [ride.id]: { lat, lon, eta } }));
     });
-
-    // WebRTC signaling event handlers
-    s.on("user_joined_voice", async ({ socketId, userName }) => {
-      console.log("Peer joined voice call:", userName, socketId);
-      const pc = new RTCPeerConnection({
-        iceServers: [
-          { urls: "stun:stun.l.google.com:19302" },
-          { urls: "stun:stun1.l.google.com:19302" }
-        ]
-      });
-      peerConnectionsRef.current[socketId] = pc;
-
-      if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach(track => pc.addTrack(track, localStreamRef.current));
-      }
-
-      pc.onicecandidate = (event) => {
-        if (event.candidate) {
-          s.emit("send_signal", {
-            targetSocketId: socketId,
-            signal: { candidate: event.candidate }
-          });
-        }
-      };
-
-      pc.ontrack = (event) => {
-        addRemoteAudio(socketId, event.streams[0]);
-      };
-
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-
-      s.emit("send_signal", {
-        targetSocketId: socketId,
-        signal: { sdp: pc.localDescription }
-      });
-    });
-
-    s.on("receive_signal", async ({ senderSocketId, signal }) => {
-      let pc = peerConnectionsRef.current[senderSocketId];
-
-      if (!pc) {
-        pc = new RTCPeerConnection({
-          iceServers: [
-            { urls: "stun:stun.l.google.com:19302" },
-            { urls: "stun:stun1.l.google.com:19302" }
-          ]
-        });
-        peerConnectionsRef.current[senderSocketId] = pc;
-
-        if (localStreamRef.current) {
-          localStreamRef.current.getTracks().forEach(track => pc.addTrack(track, localStreamRef.current));
-        }
-
-        pc.onicecandidate = (event) => {
-          if (event.candidate) {
-            s.emit("send_signal", {
-              targetSocketId: senderSocketId,
-              signal: { candidate: event.candidate }
-            });
-          }
-        };
-
-        pc.ontrack = (event) => {
-          addRemoteAudio(senderSocketId, event.streams[0]);
-        };
-      }
-
-      if (signal.sdp) {
-        await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
-        if (signal.sdp.type === "offer") {
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          s.emit("send_signal", {
-            targetSocketId: senderSocketId,
-            signal: { sdp: pc.localDescription }
-          });
-        }
-      } else if (signal.candidate) {
-        await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
-      }
-    });
-
-    s.on("user_left_voice", ({ socketId }) => {
-      console.log("Peer left voice call:", socketId);
-      const pc = peerConnectionsRef.current[socketId];
-      if (pc) pc.close();
-      delete peerConnectionsRef.current[socketId];
-      removeRemoteAudio(socketId);
-    });
   };
 
   const handleCloseCommHub = () => {
-    handleLeaveVoiceCall();
     if (socket) {
       socket.disconnect();
     }
@@ -3252,90 +3080,6 @@ export default function EmployeeDashboard() {
                 </button>
               </div>
 
-              {incomingCallAlert && !isInVoiceCall && (
-                <div style={{
-                  background: "#d4edda",
-                  color: "#155724",
-                  padding: "1rem",
-                  borderRadius: "8px",
-                  marginBottom: "1rem",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  border: "1px solid #c3e6cb"
-                }}>
-                  <div>
-                    <strong>Incoming Call!</strong>
-                    <div style={{ fontSize: "0.85rem", marginTop: "4px" }}>
-                      {incomingCallAlert} is starting a voice call.
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", gap: "0.5rem" }}>
-                    <button className="btn btn-teal" style={{ padding: "0.4rem 0.8rem", fontSize: "0.85rem" }} onClick={() => {
-                      handleJoinVoiceCall();
-                      setIncomingCallAlert(null);
-                    }}>Join</button>
-                    <button className="btn btn-outline" style={{ padding: "0.4rem 0.8rem", fontSize: "0.85rem" }} onClick={() => setIncomingCallAlert(null)}>Ignore</button>
-                  </div>
-                </div>
-              )}
-
-              {/* Live Indicator */}
-              <div
-                style={{
-                  background: "#eafaf1",
-                  color: "#2b8a3e",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  padding: "0.5rem 1rem",
-                  borderRadius: "6px",
-                  fontSize: "0.85rem",
-                  fontWeight: 600,
-                  marginBottom: "1rem",
-                }}
-              >
-                <span
-                  style={{
-                    width: "8px",
-                    height: "8px",
-                    background: "#2b8a3e",
-                    borderRadius: "50%",
-                    display: "inline-block",
-                  }}
-                ></span>
-                Connected to Ride Room
-              </div>
-
-              {/* LIVE VOICE CALL INTERFACE */}
-              <div style={{
-                background: isInVoiceCall ? "linear-gradient(135deg, #e7f5ff 0%, #d0ebff 100%)" : "#f1f3f5",
-                border: isInVoiceCall ? "1px solid #a5d8ff" : "1px solid #e9ecef",
-                borderRadius: "8px",
-                padding: "1rem",
-                marginBottom: "1rem",
-                display: "flex",
-                flexDirection: "column",
-                gap: "0.75rem",
-                boxSizing: "border-box"
-              }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: "0.85rem", fontWeight: 700, color: isInVoiceCall ? "#1971c2" : "#495057" }}>
-                    {isInVoiceCall ? "📞 Live Voice Call Active" : "🔇 Not in Voice Call"}
-                  </span>
-                  {isInVoiceCall && (
-                    <span style={{
-                      background: isMuted ? "#f1f3f5" : "#37b24d",
-                      color: isMuted ? "#495057" : "white",
-                      fontSize: "0.7rem",
-                      padding: "2px 6px",
-                      borderRadius: "10px",
-                      fontWeight: "bold"
-                    }}>
-                      {isMuted ? "MUTED" : "SPEAKING"}
-                    </span>
-                  )}
-                </div>
 
                 <div style={{ display: "flex", gap: "0.5rem" }}>
                   {!isInVoiceCall ? (

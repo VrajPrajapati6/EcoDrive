@@ -11,9 +11,9 @@ import {
   adminAddVehicle
 } from '../services/api';
 import { 
-  Building2, Users, Settings, Sliders, BarChart3, ShieldCheck, 
-  Car, DollarSign, Calendar, MapPin, CheckCircle2, XCircle, 
-  RefreshCw, UserPlus, Plus, Leaf, Globe, Mail, Phone, Fuel 
+  Users, Settings, BarChart3, ShieldCheck, 
+  Car, Calendar, CheckCircle2, XCircle, 
+  RefreshCw, UserPlus, Plus, Leaf 
 } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
 
@@ -213,8 +213,6 @@ export default function AdminDashboard() {
   };
 
   // Helper Stats
-  const activeRides = reports.filter(r => r.status === 'Open' || r.status === 'In Progress').length;
-  const completedRides = reports.filter(r => r.status === 'Completed').length;
   const totalRides = reports.length;
   
   const totalEmployeesCount = employees.length + 1; // including Admin themselves
