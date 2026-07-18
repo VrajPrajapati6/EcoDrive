@@ -3272,26 +3272,7 @@ export default function EmployeeDashboard() {
                             border: isMe ? "none" : "1px solid #dee2e6",
                           }}
                         >
-                          {msg.isVoice ? (
-                            <button
-                              onClick={() => playVoiceNote(msg.audioBase64)}
-                              style={{
-                                background: "none",
-                                border: "none",
-                                color: isMe ? "white" : "var(--odoo-violet)",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "6px",
-                                cursor: "pointer",
-                                fontWeight: 600,
-                                padding: 0,
-                              }}
-                            >
-                              Play Voice Note
-                            </button>
-                          ) : (
-                            msg.message
-                          )}
+                          {msg.message}
                         </div>
                       </div>
                     );
