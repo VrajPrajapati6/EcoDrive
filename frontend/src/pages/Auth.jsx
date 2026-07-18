@@ -149,7 +149,7 @@ export default function Auth({ onNavigate }) {
   return (
     <div className="odoo-container" style={{ maxWidth: '680px', marginTop: '2rem' }}>
       <div className="odoo-card" style={{ padding: '2.5rem' }}>
-        
+
         {/* Header Branding */}
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
           <div style={{
@@ -187,7 +187,7 @@ export default function Auth({ onNavigate }) {
           gap: '0.6rem'
         }}>
           <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-            ⚡ Hackathon Quick Demo Login (1-Click)
+            Hackathon Quick Demo Login (1-Click)
           </span>
           <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
             <button
@@ -238,14 +238,14 @@ export default function Auth({ onNavigate }) {
               className={`role-pill ${role === 'Employee' ? 'active' : ''}`}
               onClick={() => setRole('Employee')}
             >
-              🚗 Employee
+              Employee
             </button>
             <button
               type="button"
               className={`role-pill ${role === 'Company Administrator' ? 'active' : ''}`}
               onClick={() => setRole('Company Administrator')}
             >
-              🛡️ Company Administrator
+              Company Administrator
             </button>
           </div>
         </div>
@@ -289,7 +289,7 @@ export default function Auth({ onNavigate }) {
 
         {/* Main Form */}
         <form onSubmit={handleSubmit}>
-          
+
           {/* Organization Selection */}
           <div className="form-group">
             <label className="form-label">
