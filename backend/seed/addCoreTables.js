@@ -14,7 +14,7 @@ async function addCoreTables() {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
     `);
-    console.log('✅ Table "vehicles" created or verified.');
+    console.log(' Table "vehicles" created or verified.');
 
     // 2. Create rides table
     await pool.query(`
@@ -33,7 +33,7 @@ async function addCoreTables() {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
     `);
-    console.log('✅ Table "rides" created or verified.');
+    console.log(' Table "rides" created or verified.');
 
     // 3. Create bookings table
     await pool.query(`
@@ -46,11 +46,11 @@ async function addCoreTables() {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
     `);
-    console.log('✅ Table "bookings" created or verified.');
+    console.log(' Table "bookings" created or verified.');
 
-    console.log('🎉 Core tables initialization complete!');
+    console.log(' Core tables initialization complete!');
   } catch (error) {
-    console.error('❌ Error creating tables:', error);
+    console.error(' Error creating tables:', error);
   } finally {
     pool.end();
   }
