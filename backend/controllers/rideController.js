@@ -59,7 +59,7 @@ async function searchRides(req, res) {
   try {
     const result = await pool.query(`
       SELECT r.id, r.pickup_location, r.destination, r.departure_date, r.departure_time, r.available_seats, r.fare_per_seat, r.pickup_lat, r.pickup_lon, r.destination_lat, r.destination_lon,
-             u.full_name as driver_name, u.phone as driver_phone, v.make_model as vehicle_make
+             u.full_name as driver_name, u.phone as driver_phone, v.make_model as vehicle_make, v.license_plate as vehicle_license_plate
       FROM rides r
       INNER JOIN users u ON r.driver_id = u.id
       INNER JOIN vehicles v ON r.vehicle_id = v.id
@@ -143,7 +143,7 @@ async function getRideHistory(req, res) {
     // Rides where user is driver
     const drivenRidesRes = await pool.query(`
       SELECT r.id, r.pickup_location, r.destination, r.departure_date, r.departure_time, r.available_seats, r.fare_per_seat, r.status, r.cancellation_reason, r.pickup_lat, r.pickup_lon, r.destination_lat, r.destination_lon,
-             'Driver' as user_role, v.make_model as vehicle_make
+             'Driver' as user_role, v.make_model as vehicle_make, v.license_plate as vehicle_license_plate
       FROM rides r
       INNER JOIN vehicles v ON r.vehicle_id = v.id
       WHERE r.driver_id = $1
@@ -168,7 +168,7 @@ async function getRideHistory(req, res) {
       SELECT r.pickup_location, r.destination, r.departure_date, r.departure_time, r.fare_per_seat, r.status, 
              r.pickup_lat, r.pickup_lon, r.destination_lat, r.destination_lon,
              'Passenger' as user_role, u.full_name as driver_name, u.phone as driver_phone, 
-             v.make_model as vehicle_make,
+             v.make_model as vehicle_make, v.license_plate as vehicle_license_plate,
              b.seats_booked, b.status as booking_status, b.pickup_location as my_pickup_location, 
              b.pickup_lat as my_pickup_lat, b.pickup_lon as my_pickup_lon, 
              b.distance_km as my_distance_km, b.fare as my_fare, b.id as booking_id, b.cancellation_reason
@@ -325,11 +325,31 @@ async function updateBookingStatus(req, res) {
 }
 
 
+async function startRide(req, res) {
+  const { id } = req.params;
+  const driverId = req.user.id;
+  try {
+    const check = await pool.query('SELECT * FROM rides WHERE id = $1 AND driver_id = $2', [id, driverId]);
+    if (check.rows.length === 0) {
+      return res.status(403).json({ error: 'Unauthorized to modify this ride' });
+    }
+    if (check.rows[0].status !== 'Open') {
+      return res.status(400).json({ error: `Cannot start a ride that is already "${check.rows[0].status}"` });
+    }
+    await pool.query("UPDATE rides SET status = 'In Progress' WHERE id = $1", [id]);
+    res.json({ message: 'Ride started successfully' });
+  } catch (error) {
+    console.error('Error starting ride:', error);
+    res.status(500).json({ error: 'Failed to start ride' });
+  }
+}
+
 module.exports = {
   offerRide,
   searchRides,
   bookRide,
   getRideHistory,
   completeOrDeleteRide,
-  updateBookingStatus
+  updateBookingStatus,
+  startRide
 };

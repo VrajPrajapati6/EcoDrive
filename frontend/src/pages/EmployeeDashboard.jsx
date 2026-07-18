@@ -9,6 +9,11 @@ import {
   getRideHistory,
   completeOrDeleteRide,
   updateBookingStatus,
+  startRide,
+  getWalletBalance,
+  rechargeWallet,
+  payBooking,
+  getUnpaidBookings,
 } from "../services/api";
 import {
   Car,
@@ -27,6 +32,13 @@ import {
   CheckCircle2,
   XCircle,
   CheckCircle,
+  Wallet,
+  CreditCard,
+  ArrowUpCircle,
+  TrendingUp,
+  PlayCircle,
+  Zap,
+  ReceiptText,
 } from "lucide-react";
 import LocationAutocomplete from "../components/LocationAutocomplete";
 import MapDisplay from "../components/MapDisplay";
@@ -266,6 +278,11 @@ export default function EmployeeDashboard() {
       ]);
     });
 
+    // Passenger receives live vehicle location from driver
+    s.on("location_updated", ({ lat, lon, eta }) => {
+      setVehicleLiveCoords(prev => ({ ...prev, [ride.id]: { lat, lon, eta } }));
+    });
+
     // WebRTC signaling event handlers
     s.on("user_joined_voice", async ({ socketId, userName }) => {
       console.log("Peer joined voice call:", userName, socketId);
@@ -367,7 +384,26 @@ export default function EmployeeDashboard() {
     setChatMessages([]);
   };
 
-  const [activeTab, setActiveTab] = useState("find"); // find, current, offer, history, vehicles
+  const [activeTab, setActiveTab] = useState("find"); // find, current, offer, history, vehicles, wallet, payment
+
+  // Wallet state
+  const [walletBalance, setWalletBalance] = useState(0);
+  const [walletTransactions, setWalletTransactions] = useState([]);
+  const [rechargeAmount, setRechargeAmount] = useState("");
+  const [walletLoading, setWalletLoading] = useState(false);
+
+  // Payment state
+  const [unpaidBookings, setUnpaidBookings] = useState([]);
+  const [selectedPayBooking, setSelectedPayBooking] = useState(null);
+  const [paymentMethod, setPaymentMethod] = useState("Cash");
+  const [paymentLoading, setPaymentLoading] = useState(false);
+
+  // Live tracking state (per ride)
+  const [vehicleLiveCoords, setVehicleLiveCoords] = useState({}); // rideId -> { lat, lon, eta }
+  const [simulating, setSimulating] = useState({}); // rideId -> boolean
+  const simIntervalRef = useRef({});
+
+
 
   // State for Add Vehicle
   const [vehicles, setVehicles] = useState([]);
@@ -492,7 +528,10 @@ export default function EmployeeDashboard() {
     loadVehicles();
     loadRides();
     loadHistory();
+    if (activeTab === "wallet") loadWalletData();
+    if (activeTab === "payment") { loadUnpaidBookings(); loadWalletData(); }
   }, [activeTab]);
+
 
   useEffect(() => {
     const channel = supabase
@@ -555,6 +594,126 @@ export default function EmployeeDashboard() {
       console.error(err);
     }
   };
+
+  const loadWalletData = async () => {
+    try {
+      const data = await getWalletBalance();
+      setWalletBalance(parseFloat(data.balance) || 0);
+      setWalletTransactions(data.transactions || []);
+    } catch (err) {
+      console.error("Failed to load wallet data:", err);
+    }
+  };
+
+  const loadUnpaidBookings = async () => {
+    try {
+      const data = await getUnpaidBookings();
+      setUnpaidBookings(data || []);
+    } catch (err) {
+      console.error("Failed to load unpaid bookings:", err);
+    }
+  };
+
+  const handleRechargeWallet = async (amount) => {
+    const parsed = parseFloat(amount);
+    if (!parsed || parsed <= 0) { showMsg("Please enter a valid amount", true); return; }
+    setWalletLoading(true);
+    try {
+      const res = await rechargeWallet(parsed);
+      setWalletBalance(parseFloat(res.balance));
+      showMsg(`✅ Wallet recharged with $${parsed.toFixed(2)}!`);
+      setRechargeAmount("");
+      loadWalletData();
+    } catch (err) {
+      showMsg(err.message, true);
+    } finally {
+      setWalletLoading(false);
+    }
+  };
+
+  const handlePayBooking = async () => {
+    if (!selectedPayBooking) { showMsg("Please select a booking to pay", true); return; }
+    setPaymentLoading(true);
+    try {
+      const res = await payBooking(selectedPayBooking.booking_id, paymentMethod);
+      showMsg(`✅ ${res.message}`);
+      setSelectedPayBooking(null);
+      loadUnpaidBookings();
+      if (paymentMethod === "Wallet") loadWalletData();
+    } catch (err) {
+      showMsg(err.message, true);
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
+
+  const handleStartRide = async (rideId) => {
+    if (!window.confirm("Start this ride? Status will change to 'In Progress'.")) return;
+    setLoading(true);
+    try {
+      await startRide(rideId);
+      showMsg("Ride started! You are now driving.");
+      loadHistory();
+    } catch (err) {
+      showMsg(err.message, true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Driver: simulate moving along OSRM route and broadcast via socket
+  const startDrivingSimulation = async (ride, socketInst) => {
+    if (!ride.pickup_lat || !ride.destination_lat) {
+      showMsg("Cannot simulate: ride coordinates missing.", true); return;
+    }
+    try {
+      const res = await fetch(
+        `https://router.project-osrm.org/route/v1/driving/${ride.pickup_lon},${ride.pickup_lat};${ride.destination_lon},${ride.destination_lat}?overview=full&geometries=geojson`
+      );
+      const data = await res.json();
+      if (!data.routes || !data.routes[0]) { showMsg("Could not fetch route for simulation.", true); return; }
+      const coords = data.routes[0].geometry.coordinates; // [[lon, lat], ...]
+      const totalDuration = data.routes[0].duration; // seconds
+      let stepIndex = 0;
+      const step = Math.max(1, Math.floor(coords.length / 60)); // ~60 steps
+
+      setSimulating(prev => ({ ...prev, [ride.id]: true }));
+
+      const interval = setInterval(() => {
+        if (stepIndex >= coords.length) {
+          clearInterval(interval);
+          delete simIntervalRef.current[ride.id];
+          setSimulating(prev => ({ ...prev, [ride.id]: false }));
+          return;
+        }
+        const [lon, lat] = coords[stepIndex];
+        const remaining = Math.round(totalDuration * (1 - stepIndex / coords.length));
+        const minutes = Math.floor(remaining / 60);
+        const eta = `${minutes} min${minutes !== 1 ? "s" : ""}`;
+        setVehicleLiveCoords(prev => ({ ...prev, [ride.id]: { lat, lon, eta } }));
+        if (socketInst) {
+          socketInst.emit("update_location", { rideId: ride.id, lat, lon, eta });
+        }
+        stepIndex += step;
+      }, 1200);
+
+      simIntervalRef.current[ride.id] = interval;
+    } catch (err) {
+      console.error("Simulation error:", err);
+      showMsg("Simulation failed.", true);
+    }
+  };
+
+  const stopDrivingSimulation = (rideId) => {
+    if (simIntervalRef.current[rideId]) {
+      clearInterval(simIntervalRef.current[rideId]);
+      delete simIntervalRef.current[rideId];
+    }
+    setSimulating(prev => ({ ...prev, [rideId]: false }));
+    setVehicleLiveCoords(prev => { const n = { ...prev }; delete n[rideId]; return n; });
+  };
+
+
 
   const handleAddVehicle = async (e) => {
     e.preventDefault();
@@ -913,7 +1072,28 @@ export default function EmployeeDashboard() {
           />{" "}
           My Vehicles
         </button>
+        <button
+          className={`odoo-tab ${activeTab === "wallet" ? "active" : ""}`}
+          onClick={() => setActiveTab("wallet")}
+        >
+          <Wallet
+            size={16}
+            style={{ display: "inline", marginRight: "6px" }}
+          />{" "}
+          Wallet
+        </button>
+        <button
+          className={`odoo-tab ${activeTab === "payment" ? "active" : ""}`}
+          onClick={() => setActiveTab("payment")}
+        >
+          <CreditCard
+            size={16}
+            style={{ display: "inline", marginRight: "6px" }}
+          />{" "}
+          Payments
+        </button>
       </div>
+
 
       {error && (
         <div
@@ -1041,6 +1221,11 @@ export default function EmployeeDashboard() {
                                 }}
                               />{" "}
                               {ride.vehicle_make}
+                              {ride.vehicle_license_plate && (
+                                <span style={{ marginLeft: "6px", background: "#e9ecef", border: "1px solid #ced4da", borderRadius: "4px", padding: "1px 6px", fontSize: "0.78rem", fontWeight: 700, letterSpacing: "0.5px", color: "#495057" }}>
+                                  {ride.vehicle_license_plate}
+                                </span>
+                              )}
                             </span>
                             <span>
                               <Users
@@ -1428,29 +1613,60 @@ export default function EmployeeDashboard() {
                           >
                             {ride.pickup_location} → {ride.destination}
                           </h4>
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "4px", fontSize: "0.88rem", color: "var(--text-muted)" }}>
+                            <Car size={14} />
+                            <span>{ride.vehicle_make}</span>
+                            {ride.vehicle_license_plate && (
+                              <span style={{ background: "#343a40", color: "white", borderRadius: "4px", padding: "1px 8px", fontSize: "0.78rem", fontWeight: 700, letterSpacing: "1px" }}>
+                                {ride.vehicle_license_plate}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <div style={{ display: "flex", gap: "0.5rem" }}>
+
+                        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
+                          {ride.status === "Open" && (
+                            <button
+                              className="btn btn-teal"
+                              style={{ fontSize: "0.85rem", padding: "0.5rem 1rem", display: "flex", alignItems: "center", gap: "0.4rem" }}
+                              onClick={() => handleStartRide(ride.id)}
+                              disabled={loading}
+                            >
+                              <PlayCircle size={15} /> Start Ride
+                            </button>
+                          )}
+                          {ride.status === "In Progress" && (
+                            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                              {simulating[ride.id] ? (
+                                <button
+                                  className="btn btn-outline"
+                                  style={{ fontSize: "0.85rem", padding: "0.5rem 1rem", color: "#e67e22", borderColor: "#e67e22", display: "flex", alignItems: "center", gap: "0.4rem" }}
+                                  onClick={() => stopDrivingSimulation(ride.id)}
+                                >
+                                  <Zap size={15} /> Stop Sim
+                                </button>
+                              ) : (
+                                <button
+                                  className="btn btn-primary"
+                                  style={{ fontSize: "0.85rem", padding: "0.5rem 1rem", display: "flex", alignItems: "center", gap: "0.4rem" }}
+                                  onClick={() => startDrivingSimulation(ride, socket)}
+                                >
+                                  <Zap size={15} /> Simulate Driving
+                                </button>
+                              )}
+                            </div>
+                          )}
                           <button
                             className="btn btn-outline"
-                            style={{
-                              fontSize: "0.85rem",
-                              padding: "0.5rem 1rem",
-                            }}
-                            onClick={() =>
-                              handleRideAction(ride.id, "Complete")
-                            }
+                            style={{ fontSize: "0.85rem", padding: "0.5rem 1rem" }}
+                            onClick={() => handleRideAction(ride.id, "Complete")}
                             disabled={loading}
                           >
                             Complete Ride
                           </button>
                           <button
                             className="btn btn-outline"
-                            style={{
-                              fontSize: "0.85rem",
-                              padding: "0.5rem 1rem",
-                              color: "#dc3545",
-                              borderColor: "#dc3545",
-                            }}
+                            style={{ fontSize: "0.85rem", padding: "0.5rem 1rem", color: "#dc3545", borderColor: "#dc3545" }}
                             onClick={() => handleRideAction(ride.id, "Delete")}
                             disabled={loading}
                           >
@@ -1458,6 +1674,7 @@ export default function EmployeeDashboard() {
                           </button>
                         </div>
                       </div>
+
 
                       <div
                         style={{
@@ -1754,15 +1971,21 @@ export default function EmployeeDashboard() {
                                 ? {
                                     lat: parseFloat(activeRequest.pickup_lat),
                                     lon: parseFloat(activeRequest.pickup_lon),
-                                    passenger_name:
-                                      activeRequest.passenger_name,
-                                    pickup_location:
-                                      activeRequest.pickup_location,
+                                    passenger_name: activeRequest.passenger_name,
+                                    pickup_location: activeRequest.pickup_location,
                                   }
                                 : null
                             }
+                            vehicleCoords={vehicleLiveCoords[ride.id] || null}
                             height="350px"
                           />
+                          {vehicleLiveCoords[ride.id] && (
+                            <div style={{ marginTop: "8px", padding: "0.6rem 1rem", background: "linear-gradient(135deg, #6c5ce7, #a29bfe)", borderRadius: "8px", color: "white", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                              <span style={{ fontSize: "0.85rem", fontWeight: 600 }}>🚗 Simulation Active</span>
+                              <span style={{ fontSize: "0.85rem" }}>ETA: <b>{vehicleLiveCoords[ride.id].eta}</b></span>
+                            </div>
+                          )}
+
                           {activeRequest && (
                             <small
                               style={{
@@ -1902,7 +2125,12 @@ export default function EmployeeDashboard() {
                               {ride.driver_phone || "No phone number"})
                             </div>
                             <div>
-                              <b>Vehicle Make/Model:</b> {ride.vehicle_make}
+                              <b>Vehicle:</b> {ride.vehicle_make}
+                              {ride.vehicle_license_plate && (
+                                <span style={{ marginLeft: "8px", background: "#e9ecef", border: "1px solid #ced4da", borderRadius: "4px", padding: "2px 8px", fontSize: "0.82rem", fontWeight: 700, letterSpacing: "0.5px", color: "#343a40" }}>
+                                  {ride.vehicle_license_plate}
+                                </span>
+                              )}
                             </div>
                             <div>
                               <b>Departure:</b>{" "}
@@ -2040,8 +2268,20 @@ export default function EmployeeDashboard() {
                                   }
                                 : null
                             }
+                            vehicleCoords={vehicleLiveCoords[ride.id] || null}
                             height="300px"
                           />
+                          {ride.status === "In Progress" && (
+                            <div style={{ marginTop: "8px", padding: "0.65rem 1rem", borderRadius: "8px", display: "flex", justifyContent: "space-between", alignItems: "center", background: vehicleLiveCoords[ride.id] ? "linear-gradient(135deg, #6c5ce7, #a29bfe)" : "#f1f3f5", color: vehicleLiveCoords[ride.id] ? "white" : "var(--text-muted)", fontSize: "0.85rem" }}>
+                              <span style={{ fontWeight: 600 }}>
+                                {vehicleLiveCoords[ride.id] ? "🚗 Driver is on the way" : "⏳ Waiting for driver to start simulation..."}
+                              </span>
+                              {vehicleLiveCoords[ride.id] && (
+                                <span>ETA: <b>{vehicleLiveCoords[ride.id].eta}</b></span>
+                              )}
+                            </div>
+                          )}
+
                         </div>
                       </div>
                     </div>
@@ -2129,11 +2369,17 @@ export default function EmployeeDashboard() {
                           type="date"
                           className="form-control"
                           required
+                          min={new Date().toISOString().split("T")[0]}
                           value={offerForm.departureDate}
                           onChange={(e) =>
                             setOfferForm({
                               ...offerForm,
                               departureDate: e.target.value,
+                              // reset time if date changed to today so stale past time can't persist
+                              departureTime:
+                                e.target.value === new Date().toISOString().split("T")[0]
+                                  ? ""
+                                  : offerForm.departureTime,
                             })
                           }
                         />
@@ -2144,6 +2390,11 @@ export default function EmployeeDashboard() {
                           type="time"
                           className="form-control"
                           required
+                          min={
+                            offerForm.departureDate === new Date().toISOString().split("T")[0]
+                              ? new Date().toTimeString().slice(0, 5)
+                              : undefined
+                          }
                           value={offerForm.departureTime}
                           onChange={(e) =>
                             setOfferForm({
@@ -2344,8 +2595,8 @@ export default function EmployeeDashboard() {
                         {new Date(ride.departure_date).toLocaleDateString()} at{" "}
                         {ride.departure_time} |
                         {ride.user_role === "Passenger"
-                          ? ` Driver: ${ride.driver_name}`
-                          : ` Vehicle: ${ride.vehicle_make}`}
+                          ? ` Driver: ${ride.driver_name} | 🚗 ${ride.vehicle_make}${ride.vehicle_license_plate ? ` [${ride.vehicle_license_plate}]` : ""}`
+                          : ` 🚗 ${ride.vehicle_make}${ride.vehicle_license_plate ? ` [${ride.vehicle_license_plate}]` : ""}`}
                       </div>
                     </div>
                     <div>
@@ -2504,7 +2755,210 @@ export default function EmployeeDashboard() {
             </div>
           </div>
         )}
+
+        {/* ========== WALLET TAB ========== */}
+        {activeTab === "wallet" && (
+          <div>
+            <h3 style={{ marginBottom: "1.5rem", color: "var(--odoo-violet)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <Wallet size={24} /> My Wallet
+            </h3>
+
+            <div style={{ display: "flex", gap: "2rem", flexWrap: "wrap" }}>
+              {/* Balance Card */}
+              <div style={{ flex: "1 1 300px" }}>
+                <div style={{ background: "linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%)", borderRadius: "16px", padding: "2rem", color: "white", marginBottom: "1.5rem", boxShadow: "0 8px 32px rgba(108,92,231,0.35)", position: "relative", overflow: "hidden" }}>
+                  <div style={{ position: "absolute", top: "-30px", right: "-30px", width: "120px", height: "120px", borderRadius: "50%", background: "rgba(255,255,255,0.1)" }} />
+                  <div style={{ position: "absolute", bottom: "-20px", left: "60px", width: "80px", height: "80px", borderRadius: "50%", background: "rgba(255,255,255,0.07)" }} />
+                  <div style={{ fontSize: "0.85rem", opacity: 0.85, marginBottom: "0.5rem", fontWeight: 500 }}>Available Balance</div>
+                  <div style={{ fontSize: "2.8rem", fontWeight: 800, letterSpacing: "-1px" }}>${walletBalance.toFixed(2)}</div>
+                  <div style={{ marginTop: "1rem", fontSize: "0.8rem", opacity: 0.7 }}>EcoDrive Wallet • {user?.fullName}</div>
+                </div>
+
+                {/* Quick Recharge */}
+                <div style={{ background: "white", border: "1px solid var(--border-color)", borderRadius: "12px", padding: "1.5rem" }}>
+                  <h5 style={{ marginBottom: "1rem", fontWeight: 700, color: "var(--odoo-violet)", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                    <ArrowUpCircle size={18} /> Recharge Wallet
+                  </h5>
+                  <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "1rem" }}>
+                    {[10, 25, 50, 100].map(amt => (
+                      <button key={amt} className="btn btn-outline" style={{ flex: "1 1 60px", padding: "0.5rem", fontWeight: 700, fontSize: "0.95rem" }} onClick={() => handleRechargeWallet(amt)} disabled={walletLoading}>
+                        ${amt}
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <input
+                      type="number"
+                      className="form-control"
+                      placeholder="Custom amount..."
+                      min="1"
+                      step="0.01"
+                      value={rechargeAmount}
+                      onChange={e => setRechargeAmount(e.target.value)}
+                      style={{ flex: 1, borderRadius: "8px" }}
+                    />
+                    <button className="btn btn-primary" style={{ whiteSpace: "nowrap", padding: "0.5rem 1.25rem", borderRadius: "8px", display: "flex", alignItems: "center", gap: "0.4rem" }} onClick={() => handleRechargeWallet(rechargeAmount)} disabled={walletLoading || !rechargeAmount}>
+                      <ArrowUpCircle size={15} /> {walletLoading ? "..." : "Recharge"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Transaction History */}
+              <div style={{ flex: "2 1 400px" }}>
+                <div style={{ background: "white", border: "1px solid var(--border-color)", borderRadius: "12px", padding: "1.5rem" }}>
+                  <h5 style={{ marginBottom: "1rem", fontWeight: 700, color: "var(--odoo-teal)", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                    <TrendingUp size={18} /> Transaction History
+                  </h5>
+                  {walletTransactions.length === 0 ? (
+                    <p style={{ color: "var(--text-muted)", fontStyle: "italic", textAlign: "center", padding: "2rem" }}>No transactions yet. Recharge your wallet to get started!</p>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxHeight: "400px", overflowY: "auto" }}>
+                      {walletTransactions.map(tx => {
+                        const isPositive = tx.amount > 0;
+                        return (
+                          <div key={tx.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.85rem 1rem", borderRadius: "8px", background: isPositive ? "#f0fff4" : "#fff5f5", border: `1px solid ${isPositive ? "#b2f2bb" : "#ffc9c9"}` }}>
+                            <div>
+                              <div style={{ fontWeight: 600, fontSize: "0.9rem", color: isPositive ? "#2b8a3e" : "#c92a2a" }}>
+                                {tx.type === "Recharge" ? "💰" : tx.type === "Received" ? "✅" : "💳"} {tx.type}
+                              </div>
+                              <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: "2px" }}>{tx.description}</div>
+                              <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "2px" }}>{new Date(tx.created_at).toLocaleString()}</div>
+                            </div>
+                            <div style={{ fontWeight: 800, fontSize: "1.1rem", color: isPositive ? "#2b8a3e" : "#c92a2a" }}>
+                              {isPositive ? "+" : ""}{Number(tx.amount).toFixed(2)}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========== PAYMENT TAB ========== */}
+        {activeTab === "payment" && (
+          <div>
+            <h3 style={{ marginBottom: "1.5rem", color: "var(--odoo-violet)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <ReceiptText size={24} /> Payments
+            </h3>
+
+            <div style={{ display: "flex", gap: "2rem", flexWrap: "wrap" }}>
+              {/* Unpaid Bookings List */}
+              <div style={{ flex: "1 1 340px" }}>
+                <div style={{ background: "white", border: "1px solid var(--border-color)", borderRadius: "12px", padding: "1.5rem" }}>
+                  <h5 style={{ marginBottom: "1rem", fontWeight: 700, color: "#495057" }}>Rides Awaiting Payment</h5>
+                  {unpaidBookings.length === 0 ? (
+                    <div style={{ textAlign: "center", padding: "2rem" }}>
+                      <CheckCircle2 size={40} color="#2b8a3e" style={{ margin: "0 auto 1rem" }} />
+                      <p style={{ color: "var(--text-muted)" }}>All your rides are paid up! 🎉</p>
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                      {unpaidBookings.map(b => (
+                        <div
+                          key={b.booking_id}
+                          onClick={() => setSelectedPayBooking(b)}
+                          style={{ padding: "1rem", borderRadius: "10px", border: `2px solid ${selectedPayBooking?.booking_id === b.booking_id ? "var(--odoo-violet)" : "var(--border-color)"}`, background: selectedPayBooking?.booking_id === b.booking_id ? "#f3f0ff" : "#fafafa", cursor: "pointer", transition: "all 0.2s" }}
+                        >
+                          <div style={{ fontWeight: 700, color: "var(--odoo-violet)", fontSize: "0.95rem" }}>
+                            {b.pickup_location} → {b.destination}
+                          </div>
+                          <div style={{ fontSize: "0.82rem", color: "var(--text-muted)", marginTop: "4px" }}>
+                            Driver: {b.driver_name} • {new Date(b.departure_date).toLocaleDateString()}
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between", marginTop: "8px" }}>
+                            <span style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>{b.seats_booked} seat(s)</span>
+                            <span style={{ fontWeight: 800, color: "var(--odoo-teal)", fontSize: "1rem" }}>${Number(b.fare).toFixed(2)}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Payment Checkout */}
+              <div style={{ flex: "1 1 340px" }}>
+                {selectedPayBooking ? (
+                  <div style={{ background: "white", border: "1px solid var(--border-color)", borderRadius: "12px", padding: "1.5rem" }}>
+                    <h5 style={{ marginBottom: "1.25rem", fontWeight: 700, color: "var(--odoo-violet)" }}>Checkout</h5>
+
+                    {/* Selected ride summary */}
+                    <div style={{ background: "#f8f9fa", borderRadius: "10px", padding: "1rem", marginBottom: "1.25rem", borderLeft: "4px solid var(--odoo-violet)" }}>
+                      <div style={{ fontWeight: 700 }}>{selectedPayBooking.pickup_location} → {selectedPayBooking.destination}</div>
+                      <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "4px" }}>Driver: {selectedPayBooking.driver_name}</div>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginTop: "8px", fontWeight: 800 }}>
+                        <span>Amount Due</span>
+                        <span style={{ color: "var(--odoo-teal)", fontSize: "1.2rem" }}>${Number(selectedPayBooking.fare).toFixed(2)}</span>
+                      </div>
+                    </div>
+
+                    {/* Payment Method */}
+                    <label style={{ fontWeight: 600, marginBottom: "0.5rem", display: "block" }}>Select Payment Method</label>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.6rem", marginBottom: "1.25rem" }}>
+                      {["Cash", "Card", "UPI", "Wallet"].map(m => (
+                        <button
+                          key={m}
+                          onClick={() => setPaymentMethod(m)}
+                          style={{ padding: "0.75rem", borderRadius: "10px", border: `2px solid ${paymentMethod === m ? "var(--odoo-violet)" : "var(--border-color)"}`, background: paymentMethod === m ? "#f3f0ff" : "white", fontWeight: 600, color: paymentMethod === m ? "var(--odoo-violet)" : "#495057", cursor: "pointer", transition: "all 0.15s", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.4rem" }}
+                        >
+                          {m === "Cash" && "💵"}{m === "Card" && "💳"}{m === "UPI" && "📱"}{m === "Wallet" && "👛"} {m}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Wallet balance info */}
+                    {paymentMethod === "Wallet" && (
+                      <div style={{ marginBottom: "1rem", padding: "0.75rem 1rem", borderRadius: "8px", background: walletBalance >= Number(selectedPayBooking.fare) ? "#f0fff4" : "#fff5f5", border: `1px solid ${walletBalance >= Number(selectedPayBooking.fare) ? "#b2f2bb" : "#ffc9c9"}`, fontSize: "0.88rem" }}>
+                        <div style={{ fontWeight: 600, color: walletBalance >= Number(selectedPayBooking.fare) ? "#2b8a3e" : "#c92a2a" }}>
+                          {walletBalance >= Number(selectedPayBooking.fare)
+                            ? `✅ Sufficient balance ($${walletBalance.toFixed(2)} available)`
+                            : `❌ Insufficient balance ($${walletBalance.toFixed(2)} available, need $${Number(selectedPayBooking.fare).toFixed(2)})`}
+                        </div>
+                        {walletBalance < Number(selectedPayBooking.fare) && (
+                          <button className="btn btn-outline" style={{ marginTop: "0.5rem", fontSize: "0.8rem", padding: "0.35rem 0.75rem" }} onClick={() => setActiveTab("wallet")}>
+                            Top up wallet →
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    <button
+                      className="btn btn-primary"
+                      style={{ width: "100%", padding: "0.85rem", borderRadius: "10px", fontWeight: 700, fontSize: "1rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}
+                      onClick={handlePayBooking}
+                      disabled={paymentLoading || (paymentMethod === "Wallet" && walletBalance < Number(selectedPayBooking.fare))}
+                    >
+                      <CreditCard size={18} /> {paymentLoading ? "Processing..." : `Pay $${Number(selectedPayBooking.fare).toFixed(2)} via ${paymentMethod}`}
+                    </button>
+                    <button className="btn btn-outline" style={{ width: "100%", marginTop: "0.5rem", padding: "0.6rem" }} onClick={() => setSelectedPayBooking(null)}>
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ background: "#f8f9fa", borderRadius: "12px", padding: "3rem 2rem", textAlign: "center" }}>
+                    <CreditCard size={48} color="var(--text-muted)" style={{ margin: "0 auto 1rem", opacity: 0.5 }} />
+                    <h5 style={{ color: "var(--text-muted)" }}>Select a ride to pay</h5>
+                    <p style={{ fontSize: "0.88rem", color: "var(--text-muted)", marginTop: "0.5rem" }}>Click on a ride from the list on the left to proceed with payment.</p>
+
+                    {/* Wallet Balance Mini-Widget */}
+                    <div style={{ marginTop: "1.5rem", padding: "1rem", background: "linear-gradient(135deg, #6c5ce7, #a29bfe)", borderRadius: "10px", color: "white" }}>
+                      <div style={{ fontSize: "0.8rem", opacity: 0.85 }}>Your Wallet Balance</div>
+                      <div style={{ fontSize: "1.6rem", fontWeight: 800 }}>${walletBalance.toFixed(2)}</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* COMM HUB OVERLAY DRAWER */}
+
         {activeCommRide && (
           <div
             style={{

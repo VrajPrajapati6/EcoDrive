@@ -50,3 +50,13 @@ export async function toggleVehicleApproval(vehicleId, isApproved) { return requ
 export async function updateOrganizationSettings(settings) { return request('/admin/settings', { method: 'PUT', body: JSON.stringify(settings) }); }
 export async function adminAddEmployee(employeeData) { return request('/admin/employees', { method: 'POST', body: JSON.stringify(employeeData) }); }
 export async function adminAddVehicle(vehicleData) { return request('/admin/vehicles', { method: 'POST', body: JSON.stringify(vehicleData) }); }
+
+// Rides - Start
+export async function startRide(rideId) { return request(`/rides/${rideId}/start`, { method: 'PUT' }); }
+
+// Wallet & Payments
+export async function getWalletBalance() { return request('/wallet/balance'); }
+export async function rechargeWallet(amount) { return request('/wallet/recharge', { method: 'POST', body: JSON.stringify({ amount }) }); }
+export async function payBooking(bookingId, method) { return request('/wallet/pay', { method: 'POST', body: JSON.stringify({ bookingId, method }) }); }
+export async function getUnpaidBookings() { return request('/wallet/unpaid-bookings'); }
+

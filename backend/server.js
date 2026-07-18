@@ -10,6 +10,8 @@ const orgRoutes = require('./routes/orgRoutes');
 const vehicleRoutes = require('./routes/vehicleRoutes');
 const rideRoutes = require('./routes/rideRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const walletRoutes = require('./routes/walletRoutes');
+const { pool } = require('./config/supabase');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -24,6 +26,7 @@ app.use('/api/organizations', orgRoutes);
 app.use('/api/vehicles', vehicleRoutes);
 app.use('/api/rides', rideRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/wallet', walletRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -47,6 +50,22 @@ io.on('connection', (socket) => {
     const roomName = `ride_${rideId}`;
     socket.join(roomName);
     console.log(`User ${userName} (${userId}) joined room ${roomName}`);
+  });
+
+  // Handle live location update from driver
+  socket.on('update_location', async ({ rideId, lat, lon, eta }) => {
+    const roomName = `ride_${rideId}`;
+    // Broadcast to all passengers in the ride room
+    io.to(roomName).emit('location_updated', { lat, lon, eta });
+    // Persist to DB
+    try {
+      await pool.query(
+        'UPDATE rides SET current_lat = $1, current_lon = $2, current_eta = $3 WHERE id = $4',
+        [lat, lon, eta, rideId]
+      );
+    } catch (err) {
+      console.error('Error saving live location to DB:', err);
+    }
   });
 
   // Handle live text message
