@@ -33,6 +33,20 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'EcoDrive Backend with Supabase is running accurately!' });
 });
 
+// Get chat messages
+app.get('/api/rides/:id/messages', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT id, sender_id as "senderId", sender_name as "senderName", message, timestamp FROM ride_messages WHERE ride_id = $1 ORDER BY created_at ASC',
+      [req.params.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error fetching messages:', err);
+    res.status(500).json({ error: 'Failed to fetch messages' });
+  }
+});
+
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
@@ -69,27 +83,31 @@ io.on('connection', (socket) => {
   });
 
   // Handle live text message
-  socket.on('send_message', ({ rideId, message, senderId, senderName }) => {
-    const roomName = `ride_${rideId}`;
-    io.to(roomName).emit('receive_message', {
-      id: Math.random().toString(36).substring(7),
-      message,
-      senderId,
-      senderName,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    });
+  socket.on('send_message', async ({ rideId, message, senderId, senderName }) => {
+    const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    try {
+      const res = await pool.query(
+        'INSERT INTO ride_messages (ride_id, sender_id, sender_name, message, timestamp) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+        [rideId, senderId, senderName, message, timestamp]
+      );
+      const roomName = `ride_${rideId}`;
+      io.to(roomName).emit('receive_message', {
+        id: res.rows[0].id,
+        message,
+        senderId,
+        senderName,
+        timestamp
+      });
+    } catch (err) {
+      console.error('Error saving message:', err);
+    }
   });
 
-  // Handle voice chat push-to-talk broadcast
-  socket.on('voice_note', ({ rideId, audioBase64, senderId, senderName }) => {
+  // Initiate Call - Ring other users
+  socket.on('initiate_call', ({ rideId, callerName }) => {
     const roomName = `ride_${rideId}`;
-    socket.to(roomName).emit('receive_voice_note', {
-      id: Math.random().toString(36).substring(7),
-      audioBase64,
-      senderId,
-      senderName,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    });
+    // Broadcast to the text chat room to ring other users
+    socket.to(roomName).emit('incoming_call', { callerName });
   });
 
   // WebRTC Audio Voice Call Signaling Relays

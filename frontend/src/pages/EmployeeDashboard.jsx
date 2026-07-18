@@ -112,70 +112,13 @@ export default function EmployeeDashboard() {
   const [socket, setSocket] = useState(null);
   const [chatMessages, setChatMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
-  const [isRecording, setIsRecording] = useState(false);
-  const [mediaRecorder, setMediaRecorder] = useState(null);
 
   // WebRTC refs and states
   const peerConnectionsRef = useRef({});
   const localStreamRef = useRef(null);
+  const [incomingCallAlert, setIncomingCallAlert] = useState(null);
   const [isInVoiceCall, setIsInVoiceCall] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
-
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
-      let chunks = [];
-
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunks.push(e.data);
-      };
-
-      recorder.onstop = () => {
-        const audioBlob = new Blob(chunks, { type: "audio/webm" });
-        const reader = new FileReader();
-        reader.readAsDataURL(audioBlob);
-        reader.onloadend = () => {
-          const base64Audio = reader.result;
-          if (socket && activeCommRide) {
-            socket.emit("voice_note", {
-              rideId: activeCommRide.id,
-              audioBase64: base64Audio,
-              senderId: user.id,
-              senderName: user.fullName
-            });
-            setChatMessages((prev) => [...prev, {
-              id: Math.random().toString(36).substring(7),
-              senderName: "You",
-              senderId: user.id,
-              timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-              isVoice: true,
-              audioBase64: base64Audio
-            }]);
-          }
-        };
-        stream.getTracks().forEach(track => track.stop());
-      };
-
-      recorder.start();
-      setMediaRecorder(recorder);
-      setIsRecording(true);
-    } catch (err) {
-      console.error("Microphone access denied or failed:", err);
-    }
-  };
-
-  const stopRecording = () => {
-    if (mediaRecorder && mediaRecorder.state !== "inactive") {
-      mediaRecorder.stop();
-    }
-    setIsRecording(false);
-  };
-
-  const playVoiceNote = (base64Audio) => {
-    const audio = new Audio(base64Audio);
-    audio.play().catch((e) => console.error("Audio playback error:", e));
-  };
 
   const handleJoinVoiceCall = async () => {
     try {
@@ -189,6 +132,10 @@ export default function EmployeeDashboard() {
           rideId: activeCommRide.id,
           userId: user.id,
           userName: user.fullName
+        });
+        socket.emit("initiate_call", {
+          rideId: activeCommRide.id,
+          callerName: user.fullName
         });
       }
     } catch (err) {
@@ -243,9 +190,14 @@ export default function EmployeeDashboard() {
     }
   };
 
-  const handleOpenCommHub = (ride) => {
+  const handleOpenCommHub = async (ride) => {
     setActiveCommRide(ride);
-    setChatMessages([]);
+    try {
+      const messages = await api.getRideMessages(ride.id);
+      setChatMessages(messages);
+    } catch (e) {
+      setChatMessages([]);
+    }
 
     // Connect to backend port 5000 (standard for local backend)
     const socketUrl =
@@ -263,19 +215,8 @@ export default function EmployeeDashboard() {
       setChatMessages((prev) => [...prev, msg]);
     });
 
-    s.on("receive_voice_note", (voice) => {
-      playVoiceNote(voice.audioBase64);
-      setChatMessages((prev) => [
-        ...prev,
-        {
-          id: voice.id,
-          senderName: voice.senderName,
-          senderId: voice.senderId,
-          timestamp: voice.timestamp,
-          isVoice: true,
-          audioBase64: voice.audioBase64,
-        },
-      ]);
+    s.on("incoming_call", ({ callerName }) => {
+      setIncomingCallAlert(callerName);
     });
 
     // Passenger receives live vehicle location from driver
@@ -1666,6 +1607,13 @@ export default function EmployeeDashboard() {
                             Complete Ride
                           </button>
                           <button
+                            className="btn btn-teal"
+                            style={{ fontSize: "0.85rem", padding: "0.5rem 1rem" }}
+                            onClick={() => handleOpenCommHub(ride)}
+                          >
+                            Communicate
+                          </button>
+                          <button
                             className="btn btn-outline"
                             style={{ fontSize: "0.85rem", padding: "0.5rem 1rem", color: "#dc3545", borderColor: "#dc3545" }}
                             onClick={() => handleRideAction(ride.id, "Delete")}
@@ -2091,6 +2039,18 @@ export default function EmployeeDashboard() {
                           >
                             Cancel Request
                           </button>
+                          {(ride.booking_status === "Confirmed" && (ride.status === "Open" || ride.status === "In Progress")) && (
+                            <button
+                              className="btn btn-teal"
+                              style={{
+                                fontSize: "0.85rem",
+                                padding: "0.5rem 1rem",
+                              }}
+                              onClick={() => handleOpenCommHub(ride)}
+                            >
+                              Communicate
+                            </button>
+                          )}
                         </div>
                       </div>
 
@@ -3123,6 +3083,34 @@ export default function EmployeeDashboard() {
                   Close
                 </button>
               </div>
+
+              {incomingCallAlert && !isInVoiceCall && (
+                <div style={{
+                  background: "#d4edda",
+                  color: "#155724",
+                  padding: "1rem",
+                  borderRadius: "8px",
+                  marginBottom: "1rem",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  border: "1px solid #c3e6cb"
+                }}>
+                  <div>
+                    <strong>Incoming Call!</strong>
+                    <div style={{ fontSize: "0.85rem", marginTop: "4px" }}>
+                      {incomingCallAlert} is starting a voice call.
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <button className="btn btn-teal" style={{ padding: "0.4rem 0.8rem", fontSize: "0.85rem" }} onClick={() => {
+                      handleJoinVoiceCall();
+                      setIncomingCallAlert(null);
+                    }}>Join</button>
+                    <button className="btn btn-outline" style={{ padding: "0.4rem 0.8rem", fontSize: "0.85rem" }} onClick={() => setIncomingCallAlert(null)}>Ignore</button>
+                  </div>
+                </div>
+              )}
 
               {/* Live Indicator */}
               <div
