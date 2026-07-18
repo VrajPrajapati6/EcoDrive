@@ -3282,52 +3282,6 @@ export default function EmployeeDashboard() {
 
               {/* Input & Record Form */}
               <div>
-                {/* Push to talk voice chat */}
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "0.5rem",
-                    marginBottom: "1rem",
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: "0.8rem",
-                      fontWeight: 600,
-                      color: "var(--text-muted)",
-                    }}
-                  >
-                    Live Voice Chat (Push-to-Talk)
-                  </span>
-                  <button
-                    onMouseDown={startRecording}
-                    onMouseUp={stopRecording}
-                    onTouchStart={startRecording}
-                    onTouchEnd={stopRecording}
-                    style={{
-                      width: "100%",
-                      padding: "0.85rem",
-                      background: isRecording ? "#dc3545" : "#2b8a3e",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "8px",
-                      fontWeight: "bold",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: "8px",
-                      cursor: "pointer",
-                      userSelect: "none",
-                      boxShadow: "0 2px 6px rgba(0,0,0,0.1)",
-                    }}
-                  >
-                    {isRecording
-                      ? "Speaking... Release to Send"
-                      : "🎤 Hold to Speak (PTT)"}
-                  </button>
-                </div>
-
                 {/* Text Input */}
                 <form
                   onSubmit={(e) => {
