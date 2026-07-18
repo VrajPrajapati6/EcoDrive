@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getMyVehicles, addVehicle, searchRides, bookRide, offerRide, getRideHistory, completeOrDeleteRide } from '../services/api';
 import { Car, Search, PlusCircle, MapPin, Calendar, Clock, DollarSign, Users, ShieldCheck, Navigation, History, Plus, AlertCircle, CheckCircle2 } from 'lucide-react';
+import LocationAutocomplete from '../components/LocationAutocomplete';
 
 export default function EmployeeDashboard() {
   const { user } = useAuth();
@@ -196,11 +197,21 @@ export default function EmployeeDashboard() {
                 <div className="grid-2">
                   <div className="form-group">
                     <label className="form-label">Pickup Location</label>
-                    <input type="text" className="form-control" required value={offerForm.pickupLocation} onChange={e => setOfferForm({...offerForm, pickupLocation: e.target.value})} />
+                    <LocationAutocomplete
+                      value={offerForm.pickupLocation}
+                      onChange={val => setOfferForm({...offerForm, pickupLocation: val})}
+                      placeholder="Search pickup location..."
+                      required
+                    />
                   </div>
                   <div className="form-group">
                     <label className="form-label">Destination</label>
-                    <input type="text" className="form-control" required value={offerForm.destination} onChange={e => setOfferForm({...offerForm, destination: e.target.value})} />
+                    <LocationAutocomplete
+                      value={offerForm.destination}
+                      onChange={val => setOfferForm({...offerForm, destination: val})}
+                      placeholder="Search destination..."
+                      required
+                    />
                   </div>
                   <div className="form-group">
                     <label className="form-label">Date</label>
