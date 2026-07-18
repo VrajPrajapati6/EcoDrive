@@ -154,6 +154,7 @@ async function getRideHistory(req, res) {
     for (let ride of drivenRides) {
       const bookings = await pool.query(`
         SELECT b.id, b.ride_id, b.passenger_id, b.seats_booked, b.status, b.pickup_location, b.pickup_lat, b.pickup_lon, b.distance_km, b.fare, b.cancellation_reason,
+               b.payment_status, b.payment_method,
                u.full_name as passenger_name, u.phone as passenger_phone
         FROM bookings b
         INNER JOIN users u ON b.passenger_id = u.id

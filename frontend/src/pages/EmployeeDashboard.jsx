@@ -1761,6 +1761,15 @@ export default function EmployeeDashboard() {
                                       >
                                         ({rider.passenger_phone})
                                       </span>
+                                      {rider.payment_status === "Paid" ? (
+                                        <span style={{ marginLeft: "8px", padding: "1px 6px", borderRadius: "4px", background: "#d4edda", color: "#155724", fontSize: "0.75rem", fontWeight: 700 }}>
+                                          Paid via {rider.payment_method}
+                                        </span>
+                                      ) : (
+                                        <span style={{ marginLeft: "8px", padding: "1px 6px", borderRadius: "4px", background: "#fff3cd", color: "#856404", fontSize: "0.75rem", fontWeight: 700 }}>
+                                          Unpaid
+                                        </span>
+                                      )}
                                       <div
                                         style={{
                                           fontSize: "0.85rem",
