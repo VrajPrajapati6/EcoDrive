@@ -39,7 +39,7 @@ async function offerRide(req, res) {
         pickup_lat, pickup_lon, destination_lat, destination_lon
       )
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-      RETURNING *
+      RETURNING id, pickup_location, destination, departure_date, departure_time, available_seats, fare_per_seat
     `, [
       driverId, vehicleId, organizationId, pickupLocation, destination, 
       departureDate, departureTime, availableSeats, farePerSeat,
@@ -58,10 +58,11 @@ async function searchRides(req, res) {
   
   try {
     const result = await pool.query(`
-      SELECT r.*, u.full_name as driver_name, u.phone as driver_phone, v.make_model as vehicle_make
+      SELECT r.id, r.pickup_location, r.destination, r.departure_date, r.departure_time, r.available_seats, r.fare_per_seat, r.pickup_lat, r.pickup_lon, r.destination_lat, r.destination_lon,
+             u.full_name as driver_name, u.phone as driver_phone, v.make_model as vehicle_make
       FROM rides r
-      JOIN users u ON r.driver_id = u.id
-      LEFT JOIN vehicles v ON r.vehicle_id = v.id
+      INNER JOIN users u ON r.driver_id = u.id
+      INNER JOIN vehicles v ON r.vehicle_id = v.id
       WHERE r.organization_id = $1 
         AND r.status = 'Open' 
         AND r.available_seats > 0
@@ -141,9 +142,10 @@ async function getRideHistory(req, res) {
   try {
     // Rides where user is driver
     const drivenRidesRes = await pool.query(`
-      SELECT r.*, 'Driver' as user_role, v.make_model as vehicle_make
+      SELECT r.id, r.pickup_location, r.destination, r.departure_date, r.departure_time, r.available_seats, r.fare_per_seat, r.status, r.cancellation_reason, r.pickup_lat, r.pickup_lon, r.destination_lat, r.destination_lon,
+             'Driver' as user_role, v.make_model as vehicle_make
       FROM rides r
-      LEFT JOIN vehicles v ON r.vehicle_id = v.id
+      INNER JOIN vehicles v ON r.vehicle_id = v.id
       WHERE r.driver_id = $1
       ORDER BY r.departure_date DESC, r.departure_time DESC
     `, [userId]);
@@ -151,9 +153,10 @@ async function getRideHistory(req, res) {
     const drivenRides = drivenRidesRes.rows;
     for (let ride of drivenRides) {
       const bookings = await pool.query(`
-        SELECT b.*, u.full_name as passenger_name, u.phone as passenger_phone
+        SELECT b.id, b.ride_id, b.passenger_id, b.seats_booked, b.status, b.pickup_location, b.pickup_lat, b.pickup_lon, b.distance_km, b.fare, b.cancellation_reason,
+               u.full_name as passenger_name, u.phone as passenger_phone
         FROM bookings b
-        JOIN users u ON b.passenger_id = u.id
+        INNER JOIN users u ON b.passenger_id = u.id
         WHERE b.ride_id = $1
         ORDER BY b.created_at ASC
       `, [ride.id]);
@@ -162,13 +165,17 @@ async function getRideHistory(req, res) {
 
     // Rides where user is passenger
     const passengerRidesRes = await pool.query(`
-      SELECT r.*, 'Passenger' as user_role, u.full_name as driver_name, u.phone as driver_phone, 
+      SELECT r.pickup_location, r.destination, r.departure_date, r.departure_time, r.fare_per_seat, r.status, 
+             r.pickup_lat, r.pickup_lon, r.destination_lat, r.destination_lon,
+             'Passenger' as user_role, u.full_name as driver_name, u.phone as driver_phone, 
+             v.make_model as vehicle_make,
              b.seats_booked, b.status as booking_status, b.pickup_location as my_pickup_location, 
              b.pickup_lat as my_pickup_lat, b.pickup_lon as my_pickup_lon, 
-             b.distance_km as my_distance_km, b.fare as my_fare, b.id as booking_id
+             b.distance_km as my_distance_km, b.fare as my_fare, b.id as booking_id, b.cancellation_reason
       FROM bookings b
-      JOIN rides r ON b.ride_id = r.id
-      JOIN users u ON r.driver_id = u.id
+      INNER JOIN rides r ON b.ride_id = r.id
+      INNER JOIN users u ON r.driver_id = u.id
+      INNER JOIN vehicles v ON r.vehicle_id = v.id
       WHERE b.passenger_id = $1
       ORDER BY r.departure_date DESC, r.departure_time DESC
     `, [userId]);
@@ -179,7 +186,7 @@ async function getRideHistory(req, res) {
       const otherRidersRes = await pool.query(`
         SELECT b.seats_booked, b.pickup_location, b.pickup_lat, b.pickup_lon, u.full_name as passenger_name
         FROM bookings b
-        JOIN users u ON b.passenger_id = u.id
+        INNER JOIN users u ON b.passenger_id = u.id
         WHERE b.ride_id = $1 AND b.status = 'Confirmed' AND b.passenger_id != $2
       `, [ride.id, userId]);
       ride.other_riders = otherRidersRes.rows;

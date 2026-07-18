@@ -43,3 +43,10 @@ export async function completeOrDeleteRide(id, action, reason) { return request(
 export async function updateBookingStatus(bookingId, status, reason) { return request(`/rides/bookings/${bookingId}/status`, { method: 'PUT', body: JSON.stringify({ status, reason }) }); }
 // Admin
 export async function getOrganizationRidesReport() { return request('/admin/reports/rides'); }
+export async function getOrganizationEmployees() { return request('/admin/employees'); }
+export async function toggleEmployeeStatus(employeeId, isActive) { return request(`/admin/employees/${employeeId}/status`, { method: 'PUT', body: JSON.stringify({ isActive }) }); }
+export async function getOrganizationVehicles() { return request('/admin/vehicles'); }
+export async function toggleVehicleApproval(vehicleId, isApproved) { return request(`/admin/vehicles/${vehicleId}/status`, { method: 'PUT', body: JSON.stringify({ isApproved }) }); }
+export async function updateOrganizationSettings(settings) { return request('/admin/settings', { method: 'PUT', body: JSON.stringify(settings) }); }
+export async function adminAddEmployee(employeeData) { return request('/admin/employees', { method: 'POST', body: JSON.stringify(employeeData) }); }
+export async function adminAddVehicle(vehicleData) { return request('/admin/vehicles', { method: 'POST', body: JSON.stringify(vehicleData) }); }

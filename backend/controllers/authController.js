@@ -32,12 +32,14 @@ async function register(req, res) {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
+    const isActive = (role === 'Company Administrator');
+
     // Insert user
     const insertRes = await pool.query(`
-      INSERT INTO users (email, password_hash, full_name, role, organization_id, employee_id, phone)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-      RETURNING id, email, full_name, role, organization_id, employee_id, phone, created_at
-    `, [email, passwordHash, fullName, role, organizationId, employeeId || '', phone || '']);
+      INSERT INTO users (email, password_hash, full_name, role, organization_id, employee_id, phone, is_active)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING id, email, full_name, role, organization_id, employee_id, phone, is_active, created_at
+    `, [email, passwordHash, fullName, role, organizationId, employeeId || '', phone || '', isActive]);
 
     const user = insertRes.rows[0];
 
@@ -67,13 +69,18 @@ async function login(req, res) {
   }
 
   try {
-    // Find user by email
-    const userRes = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    // Find user by email (selecting only required columns, including is_active)
+    const userRes = await pool.query('SELECT id, email, password_hash, full_name, role, organization_id, employee_id, phone, is_active FROM users WHERE email = $1', [email]);
     if (userRes.rows.length === 0) {
       return res.status(401).json({ error: 'Invalid email or password.' });
     }
 
     const user = userRes.rows[0];
+
+    // Check if user account is active/approved
+    if (!user.is_active) {
+      return res.status(403).json({ error: 'Your account is pending administrator approval or has been deactivated.' });
+    }
 
     // Check password
     const isMatch = await bcrypt.compare(password, user.password_hash);
@@ -130,10 +137,12 @@ async function login(req, res) {
 async function getMe(req, res) {
   try {
     const userRes = await pool.query(`
-      SELECT u.id, u.email, u.full_name as "fullName", u.role, u.organization_id as "organizationId", u.employee_id as "employeeId", u.phone,
-             o.id as "orgId", o.name as "orgName", o.domain as "orgDomain", o.code as "orgCode"
+      SELECT u.id, u.email, u.full_name as "fullName", u.role, u.organization_id as "organizationId", u.employee_id as "employeeId", u.phone, u.is_active as "isActive",
+             o.id as "orgId", o.name as "orgName", o.domain as "orgDomain", o.code as "orgCode",
+             o.industry as "orgIndustry", o.registered_address as "orgRegisteredAddress", o.admin_contact as "orgAdminContact",
+             o.fuel_cost as "orgFuelCost", o.cost_per_km as "orgCostPerKm", o.travel_cost_operational as "orgTravelCostOperational"
       FROM users u
-      LEFT JOIN organizations o ON u.organization_id = o.id
+      INNER JOIN organizations o ON u.organization_id = o.id
       WHERE u.id = $1
     `, [req.user.id]);
 
@@ -142,6 +151,11 @@ async function getMe(req, res) {
     }
 
     const row = userRes.rows[0];
+    
+    if (!row.isActive) {
+      return res.status(403).json({ error: 'Your account has been deactivated or is pending approval.' });
+    }
+
     const user = {
       id: row.id,
       email: row.email,
@@ -154,7 +168,13 @@ async function getMe(req, res) {
         id: row.orgId,
         name: row.orgName,
         domain: row.orgDomain,
-        code: row.orgCode
+        code: row.orgCode,
+        industry: row.orgIndustry,
+        registeredAddress: row.orgRegisteredAddress,
+        adminContact: row.orgAdminContact,
+        fuelCost: parseFloat(row.orgFuelCost) || 96.50,
+        costPerKm: parseFloat(row.orgCostPerKm) || 8.00,
+        travelCostOperational: parseFloat(row.orgTravelCostOperational) || 2.50
       } : null
     };
 

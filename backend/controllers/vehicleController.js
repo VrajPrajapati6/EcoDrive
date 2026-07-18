@@ -12,7 +12,7 @@ async function addVehicle(req, res) {
     const result = await pool.query(`
       INSERT INTO vehicles (user_id, make_model, license_plate, capacity)
       VALUES ($1, $2, $3, $4)
-      RETURNING *
+      RETURNING id, make_model, license_plate, capacity
     `, [userId, makeModel, licensePlate, capacity]);
 
     res.status(201).json(result.rows[0]);
@@ -27,7 +27,7 @@ async function getMyVehicles(req, res) {
 
   try {
     const result = await pool.query(`
-      SELECT * FROM vehicles WHERE user_id = $1 ORDER BY created_at DESC
+      SELECT id, make_model, license_plate, capacity FROM vehicles WHERE user_id = $1 ORDER BY created_at DESC
     `, [userId]);
 
     res.json(result.rows);

@@ -108,8 +108,15 @@ export default function Auth({ onNavigate }) {
           employeeId,
           phone
         });
-        login(res.user, res.token);
-        onNavigate('dashboard');
+        
+        if (role === 'Employee') {
+          setSuccessMsg('Registration successful! Your account is pending administrator approval. Please wait for an admin to activate your account.');
+          setIsLogin(true);
+          setPassword('');
+        } else {
+          login(res.user, res.token);
+          onNavigate('dashboard');
+        }
       }
     } catch (err) {
       setError(err.message || 'Authentication failed');
