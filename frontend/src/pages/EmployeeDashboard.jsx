@@ -3228,7 +3228,6 @@ export default function EmployeeDashboard() {
                 </form>
               </div>
             </div>
-          </div>
         )}
 
         {/* Reusable Payment Checkout Modal for other tabs */}
