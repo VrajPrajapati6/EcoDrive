@@ -165,7 +165,7 @@ async function getRideHistory(req, res) {
 
     // Rides where user is passenger
     const passengerRidesRes = await pool.query(`
-      SELECT r.pickup_location, r.destination, r.departure_date, r.departure_time, r.fare_per_seat, r.status, 
+      SELECT r.id, r.pickup_location, r.destination, r.departure_date, r.departure_time, r.fare_per_seat, r.status, 
              r.pickup_lat, r.pickup_lon, r.destination_lat, r.destination_lon,
              'Passenger' as user_role, u.full_name as driver_name, u.phone as driver_phone, 
              v.make_model as vehicle_make, v.license_plate as vehicle_license_plate,

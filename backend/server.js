@@ -33,19 +33,7 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'EcoDrive Backend with Supabase is running accurately!' });
 });
 
-// Get chat messages
-app.get('/api/rides/:id/messages', async (req, res) => {
-  try {
-    const result = await pool.query(
-      'SELECT id, sender_id as "senderId", sender_name as "senderName", message, timestamp FROM ride_messages WHERE ride_id = $1 ORDER BY created_at ASC',
-      [req.params.id]
-    );
-    res.json(result.rows);
-  } catch (err) {
-    console.error('Error fetching messages:', err);
-    res.status(500).json({ error: 'Failed to fetch messages' });
-  }
-});
+
 
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -103,49 +91,20 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Initiate Call - Ring other users
-  socket.on('initiate_call', ({ rideId, callerName }) => {
-    const roomName = `ride_${rideId}`;
-    // Broadcast to the text chat room to ring other users
-    socket.to(roomName).emit('incoming_call', { callerName });
-  });
-
-  // WebRTC Audio Voice Call Signaling Relays
-  socket.on('join_voice_call', ({ rideId, userId, userName }) => {
-    const roomName = `voice_${rideId}`;
-    socket.join(roomName);
-    console.log(`User ${userName} (${userId}) joined voice room ${roomName}`);
-    
-    // Broadcast to other peers in this room that a new peer joined
-    socket.to(roomName).emit('user_joined_voice', {
-      socketId: socket.id,
-      userId,
-      userName
-    });
-  });
-
-  socket.on('send_signal', ({ targetSocketId, signal }) => {
-    // Relay WebRTC signal to target peer
-    io.to(targetSocketId).emit('receive_signal', {
-      senderSocketId: socket.id,
-      signal
-    });
-  });
-
-  socket.on('leave_voice_call', ({ rideId }) => {
-    const roomName = `voice_${rideId}`;
-    socket.leave(roomName);
-    socket.to(roomName).emit('user_left_voice', { socketId: socket.id });
-    console.log(`Socket ${socket.id} left voice room ${roomName}`);
-  });
-
   socket.on('disconnect', () => {
     console.log(`Socket disconnected: ${socket.id}`);
-    // Broadcast exit to any room this socket was in
-    socket.broadcast.emit('user_left_voice', { socketId: socket.id });
   });
 });
 
 server.listen(PORT, () => {
   console.log(` EcoDrive Backend Server listening on port ${PORT}`);
+});
+
+// Global error handling to prevent unexpected crashes
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception thrown:', err);
 });
