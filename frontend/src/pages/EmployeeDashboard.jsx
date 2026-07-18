@@ -342,6 +342,15 @@ export default function EmployeeDashboard() {
       const ride = availableRides.find(r => r.id === activeBookingRideId);
       if (!ride) return;
 
+      // Skip calculation if seat count is invalid
+      if (bookingParams.seats === '' || bookingParams.seats > ride.available_seats || bookingParams.seats < 1) {
+        setBookingParams(prev => ({
+          ...prev,
+          fare: null
+        }));
+        return;
+      }
+
       const dist = await fetchDistance(
         bookingParams.pickupLat,
         bookingParams.pickupLon,
@@ -552,9 +561,19 @@ export default function EmployeeDashboard() {
                                   max={ride.available_seats}
                                   className="form-control"
                                   value={bookingParams.seats}
-                                  onChange={(e) => setBookingParams({ ...bookingParams, seats: Math.max(1, parseInt(e.target.value) || 1) })}
+                                  onChange={(e) => setBookingParams({ ...bookingParams, seats: e.target.value !== '' ? parseInt(e.target.value) : '' })}
                                   required
                                 />
+                                {bookingParams.seats !== '' && bookingParams.seats > ride.available_seats && (
+                                  <span style={{ color: '#dc3545', fontSize: '0.8rem', display: 'block', marginTop: '4px', whiteSpace: 'nowrap' }}>
+                                    Cannot exceed {ride.available_seats} available seats.
+                                  </span>
+                                )}
+                                {bookingParams.seats !== '' && bookingParams.seats < 1 && (
+                                  <span style={{ color: '#dc3545', fontSize: '0.8rem', display: 'block', marginTop: '4px', whiteSpace: 'nowrap' }}>
+                                    Must request at least 1 seat.
+                                  </span>
+                                )}
                               </div>
 
                               <div style={{ background: '#f8f9fa', padding: '1rem', borderRadius: '6px', marginBottom: '1.25rem', borderLeft: '4px solid var(--odoo-teal)' }}>
@@ -573,7 +592,11 @@ export default function EmployeeDashboard() {
                               </div>
 
                               <div style={{ display: 'flex', gap: '0.75rem' }}>
-                                <button className="btn btn-teal" onClick={() => handleSendBookingRequest(ride.id)} disabled={loading || bookingParams.distanceKm === null}>
+                                <button 
+                                  className="btn btn-teal" 
+                                  onClick={() => handleSendBookingRequest(ride.id)} 
+                                  disabled={loading || bookingParams.distanceKm === null || bookingParams.seats === '' || bookingParams.seats > ride.available_seats || bookingParams.seats < 1}
+                                >
                                   Send Ride Request
                                 </button>
                                 <button className="btn btn-outline" onClick={() => setActiveBookingRideId(null)}>
