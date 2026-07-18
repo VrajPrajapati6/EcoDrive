@@ -419,7 +419,7 @@ export default function EmployeeDashboard() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <span className="odoo-badge" style={{ background: 'rgba(255,255,255,0.2)', color: 'white', borderColor: 'rgba(255,255,255,0.3)', marginBottom: '0.75rem', display: 'inline-block' }}>
-              🏢 {user?.organization?.name}
+              {user?.organization?.name}
             </span>
             <h1>Welcome, {user?.fullName}!</h1>
           </div>
@@ -611,7 +611,7 @@ export default function EmployeeDashboard() {
                           
                           {/* Confirmed Riders */}
                           <div style={{ marginBottom: '1.5rem' }}>
-                            <h5 style={{ fontWeight: 600, color: 'var(--odoo-teal)', marginBottom: '0.75rem' }}>👥 Confirmed Riders ({confirmedRiders.length})</h5>
+                            <h5 style={{ fontWeight: 600, color: 'var(--odoo-teal)', marginBottom: '0.75rem' }}>Confirmed Riders ({confirmedRiders.length})</h5>
                             {confirmedRiders.length === 0 ? (
                               <p style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '0.9rem' }}>No riders confirmed yet.</p>
                             ) : (
@@ -621,7 +621,7 @@ export default function EmployeeDashboard() {
                                     <div>
                                       <strong>{rider.passenger_name}</strong> <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>({rider.passenger_phone})</span>
                                       <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                                        📍 Pickup: {rider.pickup_location}
+                                        Pickup: {rider.pickup_location}
                                       </div>
                                     </div>
                                     <div style={{ textAlign: 'right' }}>
@@ -636,7 +636,7 @@ export default function EmployeeDashboard() {
 
                           {/* Ride Requests */}
                           <div>
-                            <h5 style={{ fontWeight: 600, color: '#e67e22', marginBottom: '0.75rem' }}>📩 Pending Ride Requests ({pendingRequests.length})</h5>
+                            <h5 style={{ fontWeight: 600, color: '#e67e22', marginBottom: '0.75rem' }}>Pending Ride Requests ({pendingRequests.length})</h5>
                             {pendingRequests.length === 0 ? (
                               <p style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '0.9rem' }}>No pending requests.</p>
                             ) : (
@@ -657,7 +657,7 @@ export default function EmployeeDashboard() {
                                       <div>
                                         <strong>{request.passenger_name}</strong> <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>({request.passenger_phone})</span>
                                         <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                                          📍 Requested Pickup: <b>{request.pickup_location}</b>
+                                          Requested Pickup: <b>{request.pickup_location}</b>
                                         </div>
                                       </div>
                                       <div style={{ textAlign: 'right' }}>
@@ -701,7 +701,7 @@ export default function EmployeeDashboard() {
                         {/* Map Panel */}
                         <div style={{ flex: '1 1 400px', minHeight: '350px' }}>
                           <h5 style={{ fontWeight: 600, marginBottom: '0.75rem' }}>
-                            🗺️ Map Route
+                            Map Route
                             {activeRequest ? ' (With Pending Request Detour)' : ' (Confirmed Route)'}
                           </h5>
                           <MapDisplay
@@ -741,7 +741,7 @@ export default function EmployeeDashboard() {
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '2px solid var(--odoo-violet)', paddingBottom: '0.75rem' }}>
                         <div>
                           <span className={`odoo-badge ${isConfirmed ? 'odoo-badge-teal' : ''}`} style={{ marginBottom: '0.5rem' }}>
-                            {isConfirmed ? '✅ CONFIRMED CARPOOL' : '⏳ PENDING APPROVAL'}
+                            {isConfirmed ? 'CONFIRMED CARPOOL' : 'PENDING APPROVAL'}
                           </span>
                           <h4 style={{ fontSize: '1.35rem', color: 'var(--odoo-violet)' }}>{ride.pickup_location} → {ride.destination}</h4>
                         </div>
@@ -775,15 +775,15 @@ export default function EmployeeDashboard() {
 
                       <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
                         <div style={{ flex: '1 1 450px' }}>
-                          <h5 style={{ fontWeight: 600, color: 'var(--odoo-violet)', marginBottom: '0.75rem' }}>📋 Booking Information</h5>
+                          <h5 style={{ fontWeight: 600, color: 'var(--odoo-violet)', marginBottom: '0.75rem' }}>Booking Information</h5>
                           
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.95rem' }} className="form-group">
-                            <div>👤 <b>Driver Name:</b> {ride.driver_name} ({ride.driver_phone || 'No phone number'})</div>
-                            <div>🚗 <b>Vehicle Make/Model:</b> {ride.vehicle_make}</div>
-                            <div>📅 <b>Departure:</b> {new Date(ride.departure_date).toLocaleDateString()} at {ride.departure_time}</div>
-                            <div>📍 <b>Your Pickup Spot:</b> {ride.my_pickup_location}</div>
-                            <div>📏 <b>Travel Distance:</b> {ride.my_distance_km} km</div>
-                            <div>🪑 <b>Seats Reserved:</b> {ride.seats_booked} seat(s)</div>
+                            <div><b>Driver Name:</b> {ride.driver_name} ({ride.driver_phone || 'No phone number'})</div>
+                            <div><b>Vehicle Make/Model:</b> {ride.vehicle_make}</div>
+                            <div><b>Departure:</b> {new Date(ride.departure_date).toLocaleDateString()} at {ride.departure_time}</div>
+                            <div><b>Your Pickup Spot:</b> {ride.my_pickup_location}</div>
+                            <div><b>Travel Distance:</b> {ride.my_distance_km} km</div>
+                            <div><b>Seats Reserved:</b> {ride.seats_booked} seat(s)</div>
                             
                             <div style={{ background: '#f8f9fa', padding: '1rem', borderRadius: '6px', marginTop: '0.5rem', borderLeft: '4px solid var(--odoo-teal)' }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, color: 'var(--odoo-teal)' }}>
@@ -799,7 +799,7 @@ export default function EmployeeDashboard() {
                           {/* Other passengers */}
                           {isConfirmed && (
                             <div style={{ marginTop: '1.25rem' }}>
-                              <h6 style={{ fontWeight: 600, marginBottom: '0.5rem' }}>👥 Other Confirmed Passenger(s) sharing this ride:</h6>
+                              <h6 style={{ fontWeight: 600, marginBottom: '0.5rem' }}>Other Confirmed Passenger(s) sharing this ride:</h6>
                               {ride.other_riders && ride.other_riders.length > 0 ? (
                                 <ul style={{ listStyleType: 'disc', paddingLeft: '1.25rem', fontSize: '0.9rem' }}>
                                   {ride.other_riders.map((r, i) => (
@@ -815,7 +815,7 @@ export default function EmployeeDashboard() {
 
                         {/* Map Panel */}
                         <div style={{ flex: '1 1 350px', minHeight: '300px' }}>
-                          <h5 style={{ fontWeight: 600, marginBottom: '0.75rem' }}>🗺️ Route Map</h5>
+                          <h5 style={{ fontWeight: 600, marginBottom: '0.75rem' }}>Route Map</h5>
                           <MapDisplay
                             startCoords={{ lat: parseFloat(ride.pickup_lat), lon: parseFloat(ride.pickup_lon) }}
                             endCoords={{ lat: parseFloat(ride.destination_lat), lon: parseFloat(ride.destination_lon) }}

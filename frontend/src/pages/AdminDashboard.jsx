@@ -34,7 +34,7 @@ export default function AdminDashboard() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
             <span className="odoo-badge" style={{ background: 'rgba(255,215,0,0.2)', color: '#ffd700', borderColor: 'rgba(255,215,0,0.3)', marginBottom: '0.75rem', display: 'inline-block' }}>
-              🛡️ COMPANY ADMINISTRATOR PORTAL
+              COMPANY ADMINISTRATOR PORTAL
             </span>
             <h1>{user?.organization?.name} Administration</h1>
             <p>Configure organization carpooling rules, operational fuel rates, and manage registered commuter profiles.</p>

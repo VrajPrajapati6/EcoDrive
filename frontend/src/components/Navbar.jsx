@@ -16,7 +16,7 @@ export default function Navbar({ onNavigate, currentPage }) {
         }}
       >
         <div className="odoo-navbar-logo-icon">E</div>
-        <span>EcoDrive <small style={{ fontSize: '0.7rem', opacity: 0.85, fontWeight: 400 }}>by Odoo</small></span>
+        <span>EcoDrive</span>
       </a>
 
       <div className="odoo-navbar-links">

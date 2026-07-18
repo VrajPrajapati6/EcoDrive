@@ -63,7 +63,7 @@ function MainContent() {
         fontSize: '0.85rem',
         color: 'var(--text-muted)'
       }}>
-        EcoDrive Enterprise Carpooling Platform • Powered by Odoo UI & Supabase Architecture • Hackathon Phase 1
+        EcoDrive Enterprise Carpooling Platform
       </footer>
     </div>
   );
