@@ -152,9 +152,10 @@ export default function AdminDashboard() {
                     </td>
                     <td style={{ padding: '1rem 0.5rem' }}>${ride.fare_per_seat}</td>
                     <td style={{ padding: '1rem 0.5rem' }}>
-                      <span className={`odoo-badge ${ride.status === 'Completed' ? 'odoo-badge-teal' : ''}`}>{ride.status}</span>
-                    </td>
-                  </tr>
+                      <span className={`odoo-badge ${ride.status === 'Completed' ? 'odoo-badge-teal' : ''}`} style={{ background: ride.status === 'Cancelled' ? '#f8d7da' : '', color: ride.status === 'Cancelled' ? '#721c24' : '' }}>
+                        {ride.status} {ride.cancellation_reason && `(Reason: ${ride.cancellation_reason})`}
+                      </span>
+                    </td>                  </tr>
                 );
               })}
             </tbody>

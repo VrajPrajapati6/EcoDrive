@@ -39,8 +39,7 @@ export async function offerRide(rideData) { return request('/rides/offer', { met
 export async function searchRides() { return request('/rides/search'); }
 export async function bookRide(bookingData) { return request('/rides/book', { method: 'POST', body: JSON.stringify(bookingData) }); }
 export async function getRideHistory() { return request('/rides/history'); }
-export async function completeOrDeleteRide(id, action) { return request(`/rides/${id}/complete`, { method: 'PUT', body: JSON.stringify({ action }) }); }
-export async function updateBookingStatus(bookingId, status) { return request(`/rides/bookings/${bookingId}/status`, { method: 'PUT', body: JSON.stringify({ status }) }); }
-
+export async function completeOrDeleteRide(id, action, reason) { return request(`/rides/${id}/complete`, { method: 'PUT', body: JSON.stringify({ action, reason }) }); }
+export async function updateBookingStatus(bookingId, status, reason) { return request(`/rides/bookings/${bookingId}/status`, { method: 'PUT', body: JSON.stringify({ status, reason }) }); }
 // Admin
 export async function getOrganizationRidesReport() { return request('/admin/reports/rides'); }

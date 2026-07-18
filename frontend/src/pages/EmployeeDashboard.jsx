@@ -415,10 +415,16 @@ export default function EmployeeDashboard() {
   };
 
   const handleRideAction = async (rideId, action) => {
-    if (!window.confirm(`Are you sure you want to ${action === 'Delete' ? 'cancel' : 'complete'} this ride?`)) return;
+    let reason = '';
+    if (action === 'Delete') {
+      reason = window.prompt('Please enter a reason for cancelling this ride:');
+      if (reason === null) return;
+    } else {
+      if (!window.confirm('Are you sure you want to complete this ride?')) return;
+    }
     setLoading(true);
     try {
-      await completeOrDeleteRide(rideId, action);
+      await completeOrDeleteRide(rideId, action, reason);
       showMsg(`Ride ${action === 'Delete' ? 'cancelled' : 'completed'} successfully!`);
       loadHistory();
     } catch (err) {
@@ -779,19 +785,17 @@ export default function EmployeeDashboard() {
                             className="btn btn-outline" 
                             style={{ color: '#dc3545', borderColor: '#dc3545', fontSize: '0.85rem', padding: '0.5rem 1rem' }} 
                             onClick={async () => {
-                              if (window.confirm('Are you sure you want to cancel your ride request?')) {
-                                setLoading(true);
-                                try {
-                                  // Call completeOrDeleteRide in backend which also clears bookings (cascade deletes on db)
-                                  await completeOrDeleteRide(ride.booking_id, 'Delete'); // or handle booking deletion
-                                  showMsg('Booking request cancelled successfully!');
-                                  loadHistory();
-                                } catch(e) {
-                                  // Alternative deletion pathway
-                                  showMsg(e.message, true);
-                                } finally {
-                                  setLoading(false);
-                                }
+                              const reason = window.prompt('Please enter a reason for cancelling your ride request:');
+                              if (reason === null) return;
+                              setLoading(true);
+                              try {
+                                await updateBookingStatus(ride.booking_id, 'Cancelled', reason);
+                                showMsg('Booking request cancelled successfully!');
+                                loadHistory();
+                              } catch(e) {
+                                showMsg(e.message, true);
+                              } finally {
+                                setLoading(false);
                               }
                             }}
                             disabled={loading}
@@ -992,10 +996,12 @@ export default function EmployeeDashboard() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
                         <strong style={{ fontSize: '1.1rem' }}>{ride.pickup_location} → {ride.destination}</strong>
                         <span className={`odoo-badge ${ride.user_role === 'Driver' ? 'odoo-badge-teal' : ''}`}>{ride.user_role}</span>
-                        <span className="odoo-badge" style={{ background: '#e9ecef', color: '#495057' }}>{ride.status}</span>
+                        <span className="odoo-badge" style={{ background: '#e9ecef', color: '#495057' }}>
+                          {ride.status} {ride.cancellation_reason && `(Reason: ${ride.cancellation_reason})`}
+                        </span>
                         {ride.user_role === 'Passenger' && (
-                          <span className={`odoo-badge ${ride.booking_status === 'Confirmed' ? 'odoo-badge-teal' : ''}`} style={{ background: ride.booking_status === 'Declined' ? '#f8d7da' : '', color: ride.booking_status === 'Declined' ? '#721c24' : '' }}>
-                            {ride.booking_status}
+                          <span className={`odoo-badge ${ride.booking_status === 'Confirmed' ? 'odoo-badge-teal' : ''}`} style={{ background: ride.booking_status === 'Declined' || ride.booking_status === 'Cancelled' ? '#f8d7da' : '', color: ride.booking_status === 'Declined' || ride.booking_status === 'Cancelled' ? '#721c24' : '' }}>
+                            {ride.booking_status} {ride.cancellation_reason && `(Reason: ${ride.cancellation_reason})`}
                           </span>
                         )}
                       </div>

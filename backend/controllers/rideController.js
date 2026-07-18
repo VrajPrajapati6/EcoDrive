@@ -200,10 +200,9 @@ async function getRideHistory(req, res) {
     res.status(500).json({ error: 'Failed to fetch ride history' });
   }
 }
-
 async function completeOrDeleteRide(req, res) {
   const { id } = req.params;
-  const { action } = req.body; // 'Complete' or 'Delete'
+  const { action, reason } = req.body; // 'Complete' or 'Delete'
   const driverId = req.user.id;
 
   try {
@@ -214,7 +213,7 @@ async function completeOrDeleteRide(req, res) {
     }
 
     if (action === 'Delete') {
-      await pool.query("UPDATE rides SET status = 'Cancelled' WHERE id = $1", [id]);
+      await pool.query("UPDATE rides SET status = 'Cancelled', cancellation_reason = $1 WHERE id = $2", [reason || '', id]);
       res.json({ message: 'Ride cancelled successfully' });
     } else if (action === 'Complete') {
       await pool.query("UPDATE rides SET status = 'Completed' WHERE id = $1", [id]);
@@ -230,17 +229,17 @@ async function completeOrDeleteRide(req, res) {
 
 async function updateBookingStatus(req, res) {
   const { bookingId } = req.params;
-  const { status } = req.body; // 'Confirmed' or 'Declined'
-  const driverId = req.user.id;
+  const { status, reason } = req.body; // 'Confirmed', 'Declined', or 'Cancelled'
+  const userId = req.user.id;
 
-  if (!['Confirmed', 'Declined'].includes(status)) {
-    return res.status(400).json({ error: 'Invalid status. Must be Confirmed or Declined.' });
+  if (!['Confirmed', 'Declined', 'Cancelled'].includes(status)) {
+    return res.status(400).json({ error: 'Invalid status. Must be Confirmed, Declined, or Cancelled.' });
   }
 
   try {
     await pool.query('BEGIN');
 
-    // 1. Get the booking and join ride to verify driver ownership
+    // 1. Get the booking and join ride to verify driver/passenger ownership
     const bookingRes = await pool.query(`
       SELECT b.*, r.driver_id, r.available_seats, r.status as ride_status
       FROM bookings b
@@ -255,16 +254,27 @@ async function updateBookingStatus(req, res) {
 
     const booking = bookingRes.rows[0];
 
-    if (booking.driver_id !== driverId) {
-      await pool.query('ROLLBACK');
-      return res.status(403).json({ error: 'Unauthorized. Only the driver of this ride can update request status.' });
+    // Authorization check
+    if (status === 'Cancelled') {
+      // Passenger cancels
+      if (booking.passenger_id !== userId) {
+        await pool.query('ROLLBACK');
+        return res.status(403).json({ error: 'Unauthorized. Only the passenger can cancel this request.' });
+      }
+    } else {
+      // Driver confirms or declines
+      if (booking.driver_id !== userId) {
+        await pool.query('ROLLBACK');
+        return res.status(403).json({ error: 'Unauthorized. Only the driver of this ride can update request status.' });
+      }
+
+      if (booking.status !== 'Requested') {
+        await pool.query('ROLLBACK');
+        return res.status(400).json({ error: `Booking has already been ${booking.status.toLowerCase()}` });
+      }
     }
 
-    if (booking.status !== 'Requested') {
-      await pool.query('ROLLBACK');
-      return res.status(400).json({ error: `Booking has already been ${booking.status.toLowerCase()}` });
-    }
-
+    // Process status updates
     if (status === 'Confirmed') {
       if (booking.ride_status !== 'Open') {
         await pool.query('ROLLBACK');
@@ -282,14 +292,21 @@ async function updateBookingStatus(req, res) {
         SET available_seats = available_seats - $1 
         WHERE id = $2
       `, [booking.seats_booked, booking.ride_id]);
+    } else if (status === 'Cancelled' && booking.status === 'Confirmed') {
+      // Release seats back to driver if it was already confirmed
+      await pool.query(`
+        UPDATE rides 
+        SET available_seats = available_seats + $1 
+        WHERE id = $2
+      `, [booking.seats_booked, booking.ride_id]);
     }
 
-    // Update booking status
+    // Update booking status and reason
     await pool.query(`
       UPDATE bookings 
-      SET status = $1 
-      WHERE id = $2
-    `, [status, bookingId]);
+      SET status = $1, cancellation_reason = $2
+      WHERE id = $3
+    `, [status, reason || '', bookingId]);
 
     await pool.query('COMMIT');
     res.json({ message: `Request successfully ${status.toLowerCase()}` });
@@ -299,6 +316,7 @@ async function updateBookingStatus(req, res) {
     res.status(500).json({ error: 'Failed to update booking status' });
   }
 }
+
 
 module.exports = {
   offerRide,
