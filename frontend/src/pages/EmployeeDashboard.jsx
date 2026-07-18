@@ -395,6 +395,7 @@ export default function EmployeeDashboard() {
   // Payment state
   const [unpaidBookings, setUnpaidBookings] = useState([]);
   const [selectedPayBooking, setSelectedPayBooking] = useState(null);
+  const [selectedHistoryRide, setSelectedHistoryRide] = useState(null);
   const [paymentMethod, setPaymentMethod] = useState("Cash");
   const [paymentLoading, setPaymentLoading] = useState(false);
 
@@ -2599,7 +2600,17 @@ export default function EmployeeDashboard() {
                           : ` 🚗 ${ride.vehicle_make}${ride.vehicle_license_plate ? ` [${ride.vehicle_license_plate}]` : ""}`}
                       </div>
                     </div>
-                    <div>
+                    <div style={{ display: "flex", gap: "0.5rem" }}>
+                      <button
+                        className="btn btn-outline"
+                        style={{
+                          fontSize: "0.85rem",
+                          padding: "0.5rem 1rem",
+                        }}
+                        onClick={() => setSelectedHistoryRide(ride)}
+                      >
+                        Details
+                      </button>
                       {((ride.user_role === "Driver" &&
                         (ride.status === "Open" ||
                           ride.status === "In Progress")) ||
@@ -2624,6 +2635,96 @@ export default function EmployeeDashboard() {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Ride Details Modal */}
+            {selectedHistoryRide && (
+              <div
+                style={{
+                  position: "fixed",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  background: "rgba(0, 0, 0, 0.5)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  zIndex: 1050,
+                }}
+              >
+                <div
+                  className="odoo-card"
+                  style={{
+                    width: "500px",
+                    maxWidth: "90%",
+                    maxHeight: "90vh",
+                    overflowY: "auto",
+                    padding: "2rem",
+                    borderRadius: "12px",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
+                    <h4 style={{ margin: 0, color: "var(--odoo-violet)" }}>Ride Details</h4>
+                    <button className="btn btn-outline" style={{ padding: "0.2rem 0.5rem" }} onClick={() => setSelectedHistoryRide(null)}>X</button>
+                  </div>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", fontSize: "0.95rem" }}>
+                    <div><b>Pickup Point:</b> {selectedHistoryRide.my_pickup_location || selectedHistoryRide.pickup_location}</div>
+                    <div><b>Destination Point:</b> {selectedHistoryRide.destination}</div>
+                    {selectedHistoryRide.user_role === "Passenger" && selectedHistoryRide.my_distance_km && (
+                      <div><b>Distance:</b> {selectedHistoryRide.my_distance_km} km</div>
+                    )}
+                    <div><b>Date & Time:</b> {new Date(selectedHistoryRide.departure_date).toLocaleDateString()} at {selectedHistoryRide.departure_time}</div>
+                    <div><b>Per Seat Charge:</b> ${Number(selectedHistoryRide.fare_per_seat).toFixed(2)}</div>
+                    
+                    <div style={{ marginTop: "0.5rem", paddingTop: "0.5rem", borderTop: "1px solid var(--border-color)" }}>
+                      <b>Total Charge:</b> 
+                      <span style={{ marginLeft: "0.5rem", color: "var(--odoo-teal)", fontWeight: 800, fontSize: "1.1rem" }}>
+                        ${selectedHistoryRide.user_role === "Passenger" 
+                          ? Number(selectedHistoryRide.my_fare).toFixed(2)
+                          : (Number(selectedHistoryRide.fare_per_seat) * (selectedHistoryRide.bookings ? selectedHistoryRide.bookings.reduce((sum, b) => sum + b.seats_booked, 0) : 0)).toFixed(2)}
+                      </span>
+                    </div>
+
+                    {selectedHistoryRide.user_role === "Passenger" && selectedHistoryRide.payment_status && (
+                      <div style={{ marginTop: "0.5rem" }}>
+                        <b>Payment Status:</b> 
+                        <span style={{ 
+                          marginLeft: "0.5rem", 
+                          padding: "2px 8px", 
+                          borderRadius: "4px",
+                          background: selectedHistoryRide.payment_status === "Paid" ? "#d4edda" : "#f8d7da",
+                          color: selectedHistoryRide.payment_status === "Paid" ? "#155724" : "#721c24",
+                          fontWeight: "bold"
+                        }}>
+                          {selectedHistoryRide.payment_status}
+                        </span>
+                      </div>
+                    )}
+
+                    {selectedHistoryRide.user_role === "Passenger" && 
+                     selectedHistoryRide.payment_status === "Unpaid" && 
+                     (selectedHistoryRide.status === "Completed" || selectedHistoryRide.status === "In Progress" || selectedHistoryRide.booking_status === "Confirmed") && (
+                      <button 
+                        className="btn btn-primary" 
+                        style={{ marginTop: "1rem", padding: "0.75rem", width: "100%", fontWeight: "bold" }}
+                        onClick={() => {
+                          // The `unpaidBookings` is loaded from wallet backend, which returns `booking_id`, `fare`, etc.
+                          // But we can just use `selectedHistoryRide` if it has everything needed for payment processing.
+                          // The Payment tab expects an object with `booking_id`, `fare`, `pickup_location`, `destination`, `driver_name`.
+                          // `selectedHistoryRide` has all these.
+                          setSelectedPayBooking(selectedHistoryRide);
+                          setSelectedHistoryRide(null);
+                          setActiveTab("payment");
+                        }}
+                      >
+                        Pay Now
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
           </div>
