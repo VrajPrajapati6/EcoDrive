@@ -29,5 +29,5 @@ app.get('/api/health', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 EcoDrive Backend Server listening on port ${PORT}`);
+  console.log(` EcoDrive Backend Server listening on port ${PORT}`);
 });
