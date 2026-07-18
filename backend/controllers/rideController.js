@@ -171,7 +171,8 @@ async function getRideHistory(req, res) {
              v.make_model as vehicle_make, v.license_plate as vehicle_license_plate,
              b.seats_booked, b.status as booking_status, b.pickup_location as my_pickup_location, 
              b.pickup_lat as my_pickup_lat, b.pickup_lon as my_pickup_lon, 
-             b.distance_km as my_distance_km, b.fare as my_fare, b.id as booking_id, b.cancellation_reason
+             b.distance_km as my_distance_km, b.fare as my_fare, b.id as booking_id, b.cancellation_reason,
+             b.payment_status, b.payment_method
       FROM bookings b
       INNER JOIN rides r ON b.ride_id = r.id
       INNER JOIN users u ON r.driver_id = u.id

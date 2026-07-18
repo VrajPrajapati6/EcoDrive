@@ -2127,6 +2127,46 @@ export default function EmployeeDashboard() {
                               Communicate
                             </button>
                           )}
+                          {isConfirmed && ride.payment_status !== "Paid" && (
+                            <button
+                              className="btn btn-primary animate-pulse"
+                              style={{
+                                fontSize: "0.85rem",
+                                padding: "0.5rem 1rem",
+                                background: "var(--odoo-violet)",
+                                border: "1px solid var(--odoo-violet)",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "0.4rem",
+                                marginLeft: "8px"
+                              }}
+                              onClick={() => setSelectedPayBooking({
+                                booking_id: ride.booking_id,
+                                pickup_location: ride.pickup_location,
+                                destination: ride.destination,
+                                driver_name: ride.driver_name,
+                                fare: ride.my_fare
+                              })}
+                            >
+                              <CreditCard size={14} /> Pay (${Number(ride.my_fare).toFixed(2)})
+                            </button>
+                          )}
+                          {isConfirmed && ride.payment_status === "Paid" && (
+                            <span
+                              style={{
+                                fontSize: "0.85rem",
+                                fontWeight: 700,
+                                color: "#2b8a3e",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "0.25rem",
+                                padding: "0.5rem",
+                                marginLeft: "8px"
+                              }}
+                            >
+                              ✅ Paid via {ride.payment_method}
+                            </span>
+                          )}
                         </div>
                       </div>
 
@@ -2622,6 +2662,19 @@ export default function EmployeeDashboard() {
                               `(Reason: ${ride.cancellation_reason})`}
                           </span>
                         )}
+                        {ride.user_role === "Passenger" && ride.booking_status === "Confirmed" && (
+                          <span
+                            className="odoo-badge"
+                            style={{
+                              background: ride.payment_status === "Paid" ? "#d4edda" : "#fff3cd",
+                              color: ride.payment_status === "Paid" ? "#155724" : "#856404",
+                              borderColor: ride.payment_status === "Paid" ? "#c3e6cb" : "#ffeeba",
+                              marginLeft: "8px"
+                            }}
+                          >
+                            {ride.payment_status === "Paid" ? `Paid via ${ride.payment_method}` : "Unpaid"}
+                          </span>
+                        )}
                       </div>
                       <div
                         style={{
@@ -2647,6 +2700,34 @@ export default function EmployeeDashboard() {
                       >
                         Details
                       </button>
+                      {ride.user_role === "Passenger" &&
+                        ride.booking_status === "Confirmed" &&
+                        ride.payment_status !== "Paid" && (
+                          <button
+                            className="btn btn-primary"
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "6px",
+                              fontSize: "0.85rem",
+                              padding: "0.5rem 1rem",
+                              background: "var(--odoo-violet)",
+                              border: "1px solid var(--odoo-violet)"
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedPayBooking({
+                                booking_id: ride.booking_id,
+                                pickup_location: ride.pickup_location,
+                                destination: ride.destination,
+                                driver_name: ride.driver_name,
+                                fare: ride.my_fare
+                              });
+                            }}
+                          >
+                            <CreditCard size={14} /> Pay (${Number(ride.my_fare).toFixed(2)})
+                          </button>
+                        )}
                       {((ride.user_role === "Driver" &&
                         (ride.status === "Open" ||
                           ride.status === "In Progress")) ||
@@ -2751,13 +2832,14 @@ export default function EmployeeDashboard() {
                         className="btn btn-primary" 
                         style={{ marginTop: "1rem", padding: "0.75rem", width: "100%", fontWeight: "bold" }}
                         onClick={() => {
-                          // The `unpaidBookings` is loaded from wallet backend, which returns `booking_id`, `fare`, etc.
-                          // But we can just use `selectedHistoryRide` if it has everything needed for payment processing.
-                          // The Payment tab expects an object with `booking_id`, `fare`, `pickup_location`, `destination`, `driver_name`.
-                          // `selectedHistoryRide` has all these.
-                          setSelectedPayBooking(selectedHistoryRide);
+                          setSelectedPayBooking({
+                            booking_id: selectedHistoryRide.booking_id,
+                            pickup_location: selectedHistoryRide.my_pickup_location || selectedHistoryRide.pickup_location,
+                            destination: selectedHistoryRide.destination,
+                            driver_name: selectedHistoryRide.driver_name,
+                            fare: selectedHistoryRide.my_fare
+                          });
                           setSelectedHistoryRide(null);
-                          setActiveTab("payment");
                         }}
                       >
                         Pay Now
@@ -3391,6 +3473,106 @@ export default function EmployeeDashboard() {
                   </button>
                 </form>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Reusable Payment Checkout Modal for other tabs */}
+        {selectedPayBooking && activeTab !== "payment" && (
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: "rgba(0, 0, 0, 0.5)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 1050,
+            }}
+          >
+            <div
+              className="odoo-card"
+              style={{
+                width: "450px",
+                maxWidth: "90%",
+                padding: "2rem",
+                borderRadius: "12px",
+                background: "white"
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
+                <h4 style={{ margin: 0, color: "var(--odoo-violet)" }}>Checkout</h4>
+                <button className="btn btn-outline" style={{ padding: "0.2rem 0.5rem" }} onClick={() => setSelectedPayBooking(null)}>X</button>
+              </div>
+
+              {/* Selected ride summary */}
+              <div style={{ background: "#f8f9fa", borderRadius: "10px", padding: "1rem", marginBottom: "1.25rem", borderLeft: "4px solid var(--odoo-violet)" }}>
+                <div style={{ fontWeight: 700 }}>{selectedPayBooking.pickup_location || selectedPayBooking.my_pickup_location} → {selectedPayBooking.destination}</div>
+                <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "4px" }}>Driver: {selectedPayBooking.driver_name}</div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginTop: "8px", fontWeight: 800 }}>
+                  <span>Amount Due</span>
+                  <span style={{ color: "var(--odoo-teal)", fontSize: "1.2rem" }}>${Number(selectedPayBooking.fare || selectedPayBooking.my_fare).toFixed(2)}</span>
+                </div>
+              </div>
+
+              {/* Payment Method */}
+              <label style={{ fontWeight: 600, marginBottom: "0.5rem", display: "block" }}>Select Payment Method</label>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.6rem", marginBottom: "1.25rem" }}>
+                {["Cash", "Card", "UPI", "Wallet"].map(m => (
+                  <button
+                    key={m}
+                    onClick={() => setPaymentMethod(m)}
+                    style={{ padding: "0.75rem", borderRadius: "10px", border: `2px solid ${paymentMethod === m ? "var(--odoo-violet)" : "var(--border-color)"}`, background: paymentMethod === m ? "#f3f0ff" : "white", fontWeight: 600, color: paymentMethod === m ? "var(--odoo-violet)" : "#495057", cursor: "pointer", transition: "all 0.15s", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.4rem" }}
+                  >
+                    {m === "Cash" && "💵"}{m === "Card" && "💳"}{m === "UPI" && "📱"}{m === "Wallet" && "👛"} {m}
+                  </button>
+                ))}
+              </div>
+
+              {/* Wallet balance info */}
+              {paymentMethod === "Wallet" && (
+                <div style={{ marginBottom: "1rem", padding: "0.75rem 1rem", borderRadius: "8px", background: walletBalance >= Number(selectedPayBooking.fare || selectedPayBooking.my_fare) ? "#f0fff4" : "#fff5f5", border: `1px solid ${walletBalance >= Number(selectedPayBooking.fare || selectedPayBooking.my_fare) ? "#b2f2bb" : "#ffc9c9"}`, fontSize: "0.88rem" }}>
+                  <div style={{ fontWeight: 600, color: walletBalance >= Number(selectedPayBooking.fare || selectedPayBooking.my_fare) ? "#2b8a3e" : "#c92a2a" }}>
+                    {walletBalance >= Number(selectedPayBooking.fare || selectedPayBooking.my_fare)
+                      ? `✅ Sufficient balance ($${walletBalance.toFixed(2)} available)`
+                      : `❌ Insufficient balance ($${walletBalance.toFixed(2)} available, need $${Number(selectedPayBooking.fare || selectedPayBooking.my_fare).toFixed(2)})`}
+                  </div>
+                  {walletBalance < Number(selectedPayBooking.fare || selectedPayBooking.my_fare) && (
+                    <button className="btn btn-outline" style={{ marginTop: "0.5rem", fontSize: "0.8rem", padding: "0.35rem 0.75rem" }} onClick={() => { setActiveTab("wallet"); setSelectedPayBooking(null); }}>
+                      Top up wallet →
+                    </button>
+                  )}
+                </div>
+              )}
+
+              <button
+                className="btn btn-primary"
+                style={{ width: "100%", padding: "0.85rem", borderRadius: "10px", fontWeight: 700, fontSize: "1rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}
+                onClick={async () => {
+                  setPaymentLoading(true);
+                  try {
+                    const res = await payBooking(selectedPayBooking.booking_id, paymentMethod);
+                    showMsg(`✅ ${res.message}`);
+                    setSelectedPayBooking(null);
+                    loadHistory();
+                    loadUnpaidBookings();
+                    if (paymentMethod === "Wallet") loadWalletData();
+                  } catch (err) {
+                    showMsg(err.message, true);
+                  } finally {
+                    setPaymentLoading(false);
+                  }
+                }}
+                disabled={paymentLoading || (paymentMethod === "Wallet" && walletBalance < Number(selectedPayBooking.fare || selectedPayBooking.my_fare))}
+              >
+                <CreditCard size={18} /> {paymentLoading ? "Processing..." : `Pay $${Number(selectedPayBooking.fare || selectedPayBooking.my_fare).toFixed(2)} via ${paymentMethod}`}
+              </button>
+              <button className="btn btn-outline" style={{ width: "100%", marginTop: "0.5rem", padding: "0.6rem" }} onClick={() => setSelectedPayBooking(null)}>
+                Cancel
+              </button>
             </div>
           </div>
         )}
