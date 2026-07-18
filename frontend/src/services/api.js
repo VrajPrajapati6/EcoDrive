@@ -23,31 +23,23 @@ async function request(endpoint, options = {}) {
   return data;
 }
 
-export async function getOrganizations() {
-  return request('/organizations');
-}
+// Auth & Orgs
+export async function getOrganizations() { return request('/organizations'); }
+export async function createOrganization(orgData) { return request('/organizations', { method: 'POST', body: JSON.stringify(orgData) }); }
+export async function registerUser(userData) { return request('/auth/register', { method: 'POST', body: JSON.stringify(userData) }); }
+export async function loginUser(credentials) { return request('/auth/login', { method: 'POST', body: JSON.stringify(credentials) }); }
+export async function getMe() { return request('/auth/me'); }
 
-export async function createOrganization(orgData) {
-  return request('/organizations', {
-    method: 'POST',
-    body: JSON.stringify(orgData)
-  });
-}
+// Vehicles
+export async function addVehicle(vehicleData) { return request('/vehicles', { method: 'POST', body: JSON.stringify(vehicleData) }); }
+export async function getMyVehicles() { return request('/vehicles'); }
 
-export async function registerUser(userData) {
-  return request('/auth/register', {
-    method: 'POST',
-    body: JSON.stringify(userData)
-  });
-}
+// Rides
+export async function offerRide(rideData) { return request('/rides/offer', { method: 'POST', body: JSON.stringify(rideData) }); }
+export async function searchRides() { return request('/rides/search'); }
+export async function bookRide(rideId, seats) { return request('/rides/book', { method: 'POST', body: JSON.stringify({ rideId, seats }) }); }
+export async function getRideHistory() { return request('/rides/history'); }
+export async function completeOrDeleteRide(id, action) { return request(`/rides/${id}/complete`, { method: 'PUT', body: JSON.stringify({ action }) }); }
 
-export async function loginUser(credentials) {
-  return request('/auth/login', {
-    method: 'POST',
-    body: JSON.stringify(credentials)
-  });
-}
-
-export async function getMe() {
-  return request('/auth/me');
-}
+// Admin
+export async function getOrganizationRidesReport() { return request('/admin/reports/rides'); }

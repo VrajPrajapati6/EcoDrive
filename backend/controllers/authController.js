@@ -7,7 +7,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'supersecret_ecodrive_jwt_key_2026_
 // Helper to generate JWT token
 function generateToken(user) {
   return jwt.sign(
-    { id: user.id, email: user.email, role: user.role, organization_id: user.organization_id },
+    { id: user.id, email: user.email, role: user.role, organization_id: user.organization_id || user.organizationId },
     JWT_SECRET,
     { expiresIn: '7d' }
   );

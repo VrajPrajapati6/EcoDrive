@@ -36,6 +36,7 @@ async function searchRides(req, res) {
         AND r.status = 'Open' 
         AND r.available_seats > 0
         AND r.driver_id != $2
+        AND r.id NOT IN (SELECT ride_id FROM bookings WHERE passenger_id = $2)
       ORDER BY r.departure_date ASC, r.departure_time ASC
     `, [organizationId, req.user.id]);
 
