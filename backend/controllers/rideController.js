@@ -1,7 +1,19 @@
 const { pool } = require('../config/supabase');
 
 async function offerRide(req, res) {
-  const { vehicleId, pickupLocation, destination, departureDate, departureTime, availableSeats, farePerSeat } = req.body;
+  const { 
+    vehicleId, 
+    pickupLocation, 
+    destination, 
+    departureDate, 
+    departureTime, 
+    availableSeats, 
+    farePerSeat,
+    pickupLat,
+    pickupLon,
+    destinationLat,
+    destinationLon
+  } = req.body;
   const driverId = req.user.id;
   const organizationId = req.user.organization_id;
 
@@ -10,11 +22,29 @@ async function offerRide(req, res) {
   }
 
   try {
+    // Validate offered seats against vehicle capacity
+    const vehicleRes = await pool.query('SELECT capacity FROM vehicles WHERE id = $1 AND user_id = $2', [vehicleId, driverId]);
+    if (vehicleRes.rows.length === 0) {
+      return res.status(400).json({ error: 'Selected vehicle not found or not registered to you.' });
+    }
+    const vehicle = vehicleRes.rows[0];
+    if (parseInt(availableSeats) > vehicle.capacity) {
+      return res.status(400).json({ error: `Offered seats (${availableSeats}) cannot exceed the vehicle capacity (${vehicle.capacity} seats).` });
+    }
+
     const result = await pool.query(`
-      INSERT INTO rides (driver_id, vehicle_id, organization_id, pickup_location, destination, departure_date, departure_time, available_seats, fare_per_seat)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      INSERT INTO rides (
+        driver_id, vehicle_id, organization_id, pickup_location, destination, 
+        departure_date, departure_time, available_seats, fare_per_seat,
+        pickup_lat, pickup_lon, destination_lat, destination_lon
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
       RETURNING *
-    `, [driverId, vehicleId, organizationId, pickupLocation, destination, departureDate, departureTime, availableSeats, farePerSeat]);
+    `, [
+      driverId, vehicleId, organizationId, pickupLocation, destination, 
+      departureDate, departureTime, availableSeats, farePerSeat,
+      pickupLat || null, pickupLon || null, destinationLat || null, destinationLon || null
+    ]);
 
     res.status(201).json(result.rows[0]);
   } catch (error) {
@@ -48,7 +78,15 @@ async function searchRides(req, res) {
 }
 
 async function bookRide(req, res) {
-  const { rideId, seats } = req.body;
+  const { 
+    rideId, 
+    seats,
+    pickupLocation,
+    pickupLat,
+    pickupLon,
+    distanceKm,
+    fare
+  } = req.body;
   const passengerId = req.user.id;
   const seatsToBook = parseInt(seats) || 1;
 
@@ -65,19 +103,31 @@ async function bookRide(req, res) {
       return res.status(400).json({ error: 'Ride is no longer available or not enough seats' });
     }
 
-    // Create booking
-    await pool.query(`
-      INSERT INTO bookings (ride_id, passenger_id, seats_booked)
-      VALUES ($1, $2, $3)
-    `, [rideId, passengerId, seatsToBook]);
+    const ride = rideCheck.rows[0];
 
-    // Update ride seats
+    // Create booking request (status is 'Requested' by default)
     await pool.query(`
-      UPDATE rides SET available_seats = available_seats - $2 WHERE id = $1
-    `, [rideId, seatsToBook]);
+      INSERT INTO bookings (
+        ride_id, passenger_id, seats_booked, status, 
+        pickup_location, pickup_lat, pickup_lon, distance_km, fare
+      )
+      VALUES ($1, $2, $3, 'Requested', $4, $5, $6, $7, $8)
+    `, [
+      rideId, 
+      passengerId, 
+      seatsToBook, 
+      pickupLocation || ride.pickup_location,
+      pickupLat !== undefined ? pickupLat : ride.pickup_lat,
+      pickupLon !== undefined ? pickupLon : ride.pickup_lon,
+      distanceKm || null,
+      fare || null
+    ]);
+
+    // Note: available_seats are NOT updated here. They will only be updated
+    // when the driver approves the request.
 
     await pool.query('COMMIT');
-    res.status(201).json({ message: 'Ride booked successfully' });
+    res.status(201).json({ message: 'Ride booking request sent successfully' });
   } catch (error) {
     await pool.query('ROLLBACK');
     console.error('Error booking ride:', error);
@@ -98,9 +148,24 @@ async function getRideHistory(req, res) {
       ORDER BY r.departure_date DESC, r.departure_time DESC
     `, [userId]);
 
+    const drivenRides = drivenRidesRes.rows;
+    for (let ride of drivenRides) {
+      const bookings = await pool.query(`
+        SELECT b.*, u.full_name as passenger_name, u.phone as passenger_phone
+        FROM bookings b
+        JOIN users u ON b.passenger_id = u.id
+        WHERE b.ride_id = $1
+        ORDER BY b.created_at ASC
+      `, [ride.id]);
+      ride.bookings = bookings.rows;
+    }
+
     // Rides where user is passenger
     const passengerRidesRes = await pool.query(`
-      SELECT r.*, 'Passenger' as user_role, u.full_name as driver_name, b.seats_booked, b.status as booking_status
+      SELECT r.*, 'Passenger' as user_role, u.full_name as driver_name, u.phone as driver_phone, 
+             b.seats_booked, b.status as booking_status, b.pickup_location as my_pickup_location, 
+             b.pickup_lat as my_pickup_lat, b.pickup_lon as my_pickup_lon, 
+             b.distance_km as my_distance_km, b.fare as my_fare, b.id as booking_id
       FROM bookings b
       JOIN rides r ON b.ride_id = r.id
       JOIN users u ON r.driver_id = u.id
@@ -108,7 +173,19 @@ async function getRideHistory(req, res) {
       ORDER BY r.departure_date DESC, r.departure_time DESC
     `, [userId]);
 
-    const allRides = [...drivenRidesRes.rows, ...passengerRidesRes.rows];
+    const passengerRides = passengerRidesRes.rows;
+    for (let ride of passengerRides) {
+      // Fetch all other confirmed riders for this ride
+      const otherRidersRes = await pool.query(`
+        SELECT b.seats_booked, b.pickup_location, b.pickup_lat, b.pickup_lon, u.full_name as passenger_name
+        FROM bookings b
+        JOIN users u ON b.passenger_id = u.id
+        WHERE b.ride_id = $1 AND b.status = 'Confirmed' AND b.passenger_id != $2
+      `, [ride.id, userId]);
+      ride.other_riders = otherRidersRes.rows;
+    }
+
+    const allRides = [...drivenRides, ...passengerRides];
     
     // Sort combined by date
     allRides.sort((a, b) => {
@@ -126,7 +203,7 @@ async function getRideHistory(req, res) {
 
 async function completeOrDeleteRide(req, res) {
   const { id } = req.params;
-  const { action } = req.body; // 'Complete' or 'Delete/Cancel'
+  const { action } = req.body; // 'Complete' or 'Delete'
   const driverId = req.user.id;
 
   try {
@@ -151,10 +228,83 @@ async function completeOrDeleteRide(req, res) {
   }
 }
 
+async function updateBookingStatus(req, res) {
+  const { bookingId } = req.params;
+  const { status } = req.body; // 'Confirmed' or 'Declined'
+  const driverId = req.user.id;
+
+  if (!['Confirmed', 'Declined'].includes(status)) {
+    return res.status(400).json({ error: 'Invalid status. Must be Confirmed or Declined.' });
+  }
+
+  try {
+    await pool.query('BEGIN');
+
+    // 1. Get the booking and join ride to verify driver ownership
+    const bookingRes = await pool.query(`
+      SELECT b.*, r.driver_id, r.available_seats, r.status as ride_status
+      FROM bookings b
+      JOIN rides r ON b.ride_id = r.id
+      WHERE b.id = $1 FOR UPDATE
+    `, [bookingId]);
+
+    if (bookingRes.rows.length === 0) {
+      await pool.query('ROLLBACK');
+      return res.status(404).json({ error: 'Booking request not found' });
+    }
+
+    const booking = bookingRes.rows[0];
+
+    if (booking.driver_id !== driverId) {
+      await pool.query('ROLLBACK');
+      return res.status(403).json({ error: 'Unauthorized. Only the driver of this ride can update request status.' });
+    }
+
+    if (booking.status !== 'Requested') {
+      await pool.query('ROLLBACK');
+      return res.status(400).json({ error: `Booking has already been ${booking.status.toLowerCase()}` });
+    }
+
+    if (status === 'Confirmed') {
+      if (booking.ride_status !== 'Open') {
+        await pool.query('ROLLBACK');
+        return res.status(400).json({ error: 'Ride is no longer open' });
+      }
+
+      if (booking.available_seats < booking.seats_booked) {
+        await pool.query('ROLLBACK');
+        return res.status(400).json({ error: 'Not enough available seats in the ride' });
+      }
+
+      // Update ride available seats
+      await pool.query(`
+        UPDATE rides 
+        SET available_seats = available_seats - $1 
+        WHERE id = $2
+      `, [booking.seats_booked, booking.ride_id]);
+    }
+
+    // Update booking status
+    await pool.query(`
+      UPDATE bookings 
+      SET status = $1 
+      WHERE id = $2
+    `, [status, bookingId]);
+
+    await pool.query('COMMIT');
+    res.json({ message: `Request successfully ${status.toLowerCase()}` });
+  } catch (error) {
+    await pool.query('ROLLBACK');
+    console.error('Error updating booking status:', error);
+    res.status(500).json({ error: 'Failed to update booking status' });
+  }
+}
+
 module.exports = {
   offerRide,
   searchRides,
   bookRide,
   getRideHistory,
-  completeOrDeleteRide
+  completeOrDeleteRide,
+  updateBookingStatus
 };

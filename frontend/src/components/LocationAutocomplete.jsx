@@ -73,7 +73,7 @@ export default function LocationAutocomplete({ value, onChange, placeholder, req
     if (inputValue !== lastSelected) {
       const resetValue = lastSelected || '';
       setInputValue(resetValue);
-      onChange(resetValue);
+      onChange(resetValue, null);
     }
   };
 
@@ -90,7 +90,7 @@ export default function LocationAutocomplete({ value, onChange, placeholder, req
     const name = item.display_name;
     setInputValue(name);
     setLastSelected(name);
-    onChange(name);
+    onChange(name, item);
     setIsOpen(false);
     setActiveIndex(-1);
   };
