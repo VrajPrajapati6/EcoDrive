@@ -15,7 +15,8 @@ import {
   payBooking,
   getUnpaidBookings,
   createRechargeOrder,
-  verifyRechargePayment
+  verifyRechargePayment,
+  getRideMessages,
 } from "../services/api";
 import {
   Car,
@@ -195,7 +196,7 @@ export default function EmployeeDashboard() {
   const handleOpenCommHub = async (ride) => {
     setActiveCommRide(ride);
     try {
-      const messages = await api.getRideMessages(ride.id);
+      const messages = await getRideMessages(ride.id);
       setChatMessages(messages);
     } catch (e) {
       setChatMessages([]);
@@ -1382,7 +1383,7 @@ export default function EmployeeDashboard() {
                                 />
                                 {bookingParams.seats !== "" &&
                                   bookingParams.seats >
-                                    ride.available_seats && (
+                                  ride.available_seats && (
                                     <span
                                       style={{
                                         color: "#dc3545",
@@ -1476,7 +1477,7 @@ export default function EmployeeDashboard() {
                                     bookingParams.distanceKm === null ||
                                     bookingParams.seats === "" ||
                                     bookingParams.seats >
-                                      ride.available_seats ||
+                                    ride.available_seats ||
                                     bookingParams.seats < 1
                                   }
                                 >
@@ -1506,9 +1507,9 @@ export default function EmployeeDashboard() {
                                 requestCoords={
                                   bookingParams.pickupLat
                                     ? {
-                                        lat: bookingParams.pickupLat,
-                                        lon: bookingParams.pickupLon,
-                                      }
+                                      lat: bookingParams.pickupLat,
+                                      lon: bookingParams.pickupLon,
+                                    }
                                     : null
                                 }
                                 height="280px"
@@ -1533,7 +1534,7 @@ export default function EmployeeDashboard() {
             </h3>
 
             {activeDriverRides.length === 0 &&
-            activePassengerRides.length === 0 ? (
+              activePassengerRides.length === 0 ? (
               <div
                 style={{
                   textAlign: "center",
@@ -2003,11 +2004,11 @@ export default function EmployeeDashboard() {
                             requestCoords={
                               activeRequest
                                 ? {
-                                    lat: parseFloat(activeRequest.pickup_lat),
-                                    lon: parseFloat(activeRequest.pickup_lon),
-                                    passenger_name: activeRequest.passenger_name,
-                                    pickup_location: activeRequest.pickup_location,
-                                  }
+                                  lat: parseFloat(activeRequest.pickup_lat),
+                                  lon: parseFloat(activeRequest.pickup_lon),
+                                  passenger_name: activeRequest.passenger_name,
+                                  pickup_location: activeRequest.pickup_location,
+                                }
                                 : null
                             }
                             vehicleCoords={vehicleLiveCoords[ride.id] || null}
@@ -2282,7 +2283,7 @@ export default function EmployeeDashboard() {
                                 Other Confirmed Passenger(s) sharing this ride:
                               </h6>
                               {ride.other_riders &&
-                              ride.other_riders.length > 0 ? (
+                                ride.other_riders.length > 0 ? (
                                 <ul
                                   style={{
                                     listStyleType: "disc",
@@ -2337,21 +2338,21 @@ export default function EmployeeDashboard() {
                               })),
                               isConfirmed
                                 ? {
-                                    lat: parseFloat(ride.my_pickup_lat),
-                                    lon: parseFloat(ride.my_pickup_lon),
-                                    passenger_name: "You",
-                                    pickup_location: ride.my_pickup_location,
-                                  }
+                                  lat: parseFloat(ride.my_pickup_lat),
+                                  lon: parseFloat(ride.my_pickup_lon),
+                                  passenger_name: "You",
+                                  pickup_location: ride.my_pickup_location,
+                                }
                                 : null,
                             ].filter((p) => p && p.lat && p.lon)}
                             requestCoords={
                               !isConfirmed
                                 ? {
-                                    lat: parseFloat(ride.my_pickup_lat),
-                                    lon: parseFloat(ride.my_pickup_lon),
-                                    passenger_name: "You (Pending Request)",
-                                    pickup_location: ride.my_pickup_location,
-                                  }
+                                  lat: parseFloat(ride.my_pickup_lat),
+                                  lon: parseFloat(ride.my_pickup_lon),
+                                  passenger_name: "You (Pending Request)",
+                                  pickup_location: ride.my_pickup_location,
+                                }
                                 : null
                             }
                             vehicleCoords={vehicleLiveCoords[ride.id] || null}
@@ -2575,17 +2576,17 @@ export default function EmployeeDashboard() {
                       startCoords={
                         offerForm.pickupLat
                           ? {
-                              lat: offerForm.pickupLat,
-                              lon: offerForm.pickupLon,
-                            }
+                            lat: offerForm.pickupLat,
+                            lon: offerForm.pickupLon,
+                          }
                           : null
                       }
                       endCoords={
                         offerForm.destinationLat
                           ? {
-                              lat: offerForm.destinationLat,
-                              lon: offerForm.destinationLon,
-                            }
+                            lat: offerForm.destinationLat,
+                            lon: offerForm.destinationLon,
+                          }
                           : null
                       }
                       height="380px"
@@ -2656,12 +2657,12 @@ export default function EmployeeDashboard() {
                             style={{
                               background:
                                 ride.booking_status === "Declined" ||
-                                ride.booking_status === "Cancelled"
+                                  ride.booking_status === "Cancelled"
                                   ? "#f8d7da"
                                   : "",
                               color:
                                 ride.booking_status === "Declined" ||
-                                ride.booking_status === "Cancelled"
+                                  ride.booking_status === "Cancelled"
                                   ? "#721c24"
                                   : "",
                             }}
@@ -2744,20 +2745,20 @@ export default function EmployeeDashboard() {
                           ride.booking_status === "Confirmed" &&
                           (ride.status === "Open" ||
                             ride.status === "In Progress"))) && (
-                        <button
-                          className="btn btn-teal"
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "6px",
-                            fontSize: "0.85rem",
-                            padding: "0.5rem 1rem",
-                          }}
-                          onClick={() => handleOpenCommHub(ride)}
-                        >
-                          Communicate
-                        </button>
-                      )}
+                          <button
+                            className="btn btn-teal"
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "6px",
+                              fontSize: "0.85rem",
+                              padding: "0.5rem 1rem",
+                            }}
+                            onClick={() => handleOpenCommHub(ride)}
+                          >
+                            Communicate
+                          </button>
+                        )}
                     </div>
                   </div>
                 ))}
@@ -2808,11 +2809,11 @@ export default function EmployeeDashboard() {
                     )}
                     <div><b>Date & Time:</b> {new Date(selectedHistoryRide.departure_date).toLocaleDateString()} at {selectedHistoryRide.departure_time}</div>
                     <div><b>Per Seat Charge:</b> ${Number(selectedHistoryRide.fare_per_seat).toFixed(2)}</div>
-                    
+
                     <div style={{ marginTop: "0.5rem", paddingTop: "0.5rem", borderTop: "1px solid var(--border-color)" }}>
-                      <b>Total Charge:</b> 
+                      <b>Total Charge:</b>
                       <span style={{ marginLeft: "0.5rem", color: "var(--odoo-teal)", fontWeight: 800, fontSize: "1.1rem" }}>
-                        ${selectedHistoryRide.user_role === "Passenger" 
+                        ${selectedHistoryRide.user_role === "Passenger"
                           ? Number(selectedHistoryRide.my_fare).toFixed(2)
                           : (Number(selectedHistoryRide.fare_per_seat) * (selectedHistoryRide.bookings ? selectedHistoryRide.bookings.reduce((sum, b) => sum + b.seats_booked, 0) : 0)).toFixed(2)}
                       </span>
@@ -2820,10 +2821,10 @@ export default function EmployeeDashboard() {
 
                     {selectedHistoryRide.user_role === "Passenger" && selectedHistoryRide.payment_status && (
                       <div style={{ marginTop: "0.5rem" }}>
-                        <b>Payment Status:</b> 
-                        <span style={{ 
-                          marginLeft: "0.5rem", 
-                          padding: "2px 8px", 
+                        <b>Payment Status:</b>
+                        <span style={{
+                          marginLeft: "0.5rem",
+                          padding: "2px 8px",
                           borderRadius: "4px",
                           background: selectedHistoryRide.payment_status === "Paid" ? "#d4edda" : "#f8d7da",
                           color: selectedHistoryRide.payment_status === "Paid" ? "#155724" : "#721c24",
@@ -2834,26 +2835,26 @@ export default function EmployeeDashboard() {
                       </div>
                     )}
 
-                    {selectedHistoryRide.user_role === "Passenger" && 
-                     selectedHistoryRide.payment_status === "Unpaid" && 
-                     (selectedHistoryRide.status === "Completed" || selectedHistoryRide.status === "In Progress" || selectedHistoryRide.booking_status === "Confirmed") && (
-                      <button 
-                        className="btn btn-primary" 
-                        style={{ marginTop: "1rem", padding: "0.75rem", width: "100%", fontWeight: "bold" }}
-                        onClick={() => {
-                          setSelectedPayBooking({
-                            booking_id: selectedHistoryRide.booking_id,
-                            pickup_location: selectedHistoryRide.my_pickup_location || selectedHistoryRide.pickup_location,
-                            destination: selectedHistoryRide.destination,
-                            driver_name: selectedHistoryRide.driver_name,
-                            fare: selectedHistoryRide.my_fare
-                          });
-                          setSelectedHistoryRide(null);
-                        }}
-                      >
-                        Pay Now
-                      </button>
-                    )}
+                    {selectedHistoryRide.user_role === "Passenger" &&
+                      selectedHistoryRide.payment_status === "Unpaid" &&
+                      (selectedHistoryRide.status === "Completed" || selectedHistoryRide.status === "In Progress" || selectedHistoryRide.booking_status === "Confirmed") && (
+                        <button
+                          className="btn btn-primary"
+                          style={{ marginTop: "1rem", padding: "0.75rem", width: "100%", fontWeight: "bold" }}
+                          onClick={() => {
+                            setSelectedPayBooking({
+                              booking_id: selectedHistoryRide.booking_id,
+                              pickup_location: selectedHistoryRide.my_pickup_location || selectedHistoryRide.pickup_location,
+                              destination: selectedHistoryRide.destination,
+                              driver_name: selectedHistoryRide.driver_name,
+                              fare: selectedHistoryRide.my_fare
+                            });
+                            setSelectedHistoryRide(null);
+                          }}
+                        >
+                          Pay Now
+                        </button>
+                      )}
                   </div>
                 </div>
               </div>
@@ -3338,8 +3339,8 @@ export default function EmployeeDashboard() {
 
                 <div style={{ display: "flex", gap: "0.5rem" }}>
                   {!isInVoiceCall ? (
-                    <button 
-                      className="btn btn-teal" 
+                    <button
+                      className="btn btn-teal"
                       style={{ flex: 1, padding: "0.6rem", fontSize: "0.85rem" }}
                       onClick={handleJoinVoiceCall}
                     >
@@ -3347,11 +3348,11 @@ export default function EmployeeDashboard() {
                     </button>
                   ) : (
                     <>
-                      <button 
-                        className="btn btn-outline" 
-                        style={{ 
-                          flex: 1, 
-                          padding: "0.6rem", 
+                      <button
+                        className="btn btn-outline"
+                        style={{
+                          flex: 1,
+                          padding: "0.6rem",
                           fontSize: "0.85rem",
                           color: isMuted ? "#37b24d" : "#e67e22",
                           borderColor: isMuted ? "#37b24d" : "#e67e22"
@@ -3360,11 +3361,11 @@ export default function EmployeeDashboard() {
                       >
                         {isMuted ? "🎙️ Unmute Mic" : "🔇 Mute Mic"}
                       </button>
-                      <button 
-                        className="btn" 
-                        style={{ 
-                          flex: 1, 
-                          padding: "0.6rem", 
+                      <button
+                        className="btn"
+                        style={{
+                          flex: 1,
+                          padding: "0.6rem",
                           fontSize: "0.85rem",
                           background: "#fa5252",
                           color: "white",
