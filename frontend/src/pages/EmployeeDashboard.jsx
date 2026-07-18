@@ -14,6 +14,8 @@ import {
   rechargeWallet,
   payBooking,
   getUnpaidBookings,
+  createRechargeOrder,
+  verifyRechargePayment
 } from "../services/api";
 import {
   Car,
@@ -474,6 +476,16 @@ export default function EmployeeDashboard() {
     if (activeTab === "payment") { loadUnpaidBookings(); loadWalletData(); }
   }, [activeTab]);
 
+  // Load Razorpay SDK
+  useEffect(() => {
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    document.body.appendChild(script);
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, []);
 
   useEffect(() => {
     const channel = supabase
@@ -561,14 +573,78 @@ export default function EmployeeDashboard() {
     if (!parsed || parsed <= 0) { showMsg("Please enter a valid amount", true); return; }
     setWalletLoading(true);
     try {
-      const res = await rechargeWallet(parsed);
-      setWalletBalance(parseFloat(res.balance));
-      showMsg(`✅ Wallet recharged with $${parsed.toFixed(2)}!`);
-      setRechargeAmount("");
-      loadWalletData();
+      // 1. Create Razorpay order on backend
+      const orderData = await createRechargeOrder(parsed);
+
+      // 2. Setup Razorpay Checkout options
+      const options = {
+        key: orderData.keyId,
+        amount: orderData.amount,
+        currency: orderData.currency,
+        name: "EcoDrive Wallet",
+        description: `Wallet Recharge: $${parsed.toFixed(2)}`,
+        order_id: orderData.orderId,
+        handler: async function (response) {
+          // 3. Verify payment signature on backend
+          setWalletLoading(true);
+          try {
+            const verificationData = {
+              amount: parsed,
+              razorpayPaymentId: response.razorpay_payment_id,
+              razorpayOrderId: response.razorpay_order_id,
+              razorpaySignature: response.razorpay_signature,
+              isSimulation: orderData.isSimulation
+            };
+
+            const verificationResult = await verifyRechargePayment(verificationData);
+            setWalletBalance(parseFloat(verificationResult.balance));
+            showMsg(`✅ Wallet recharged successfully with $${parsed.toFixed(2)}!`);
+            setRechargeAmount("");
+            loadWalletData();
+          } catch (verifyErr) {
+            showMsg(verifyErr.message || "Payment verification failed.", true);
+          } finally {
+            setWalletLoading(false);
+          }
+        },
+        prefill: {
+          name: user?.fullName || "",
+          email: user?.email || "",
+          contact: user?.phone || ""
+        },
+        theme: {
+          color: "#71639e" // Odoo Violet theme style
+        },
+        modal: {
+          ondismiss: function () {
+            setWalletLoading(false);
+          }
+        }
+      };
+
+      // 3. Open Razorpay checkout
+      if (orderData.isSimulation) {
+        const proceedSim = window.confirm(
+          `Razorpay keys are not configured yet (Simulation Mode).\n\nRecharge Amount: $${parsed.toFixed(2)}\nOrder ID: ${orderData.orderId}\n\nWould you like to simulate a successful payment?`
+        );
+        if (proceedSim) {
+          options.handler({
+            razorpay_payment_id: `pay_sim_${Date.now()}`,
+            razorpay_order_id: orderData.orderId,
+            razorpay_signature: "simulated_signature"
+          });
+        } else {
+          setWalletLoading(false);
+        }
+      } else {
+        if (!window.Razorpay) {
+          throw new Error("Razorpay SDK failed to load. Please check your internet connection.");
+        }
+        const rzp = new window.Razorpay(options);
+        rzp.open();
+      }
     } catch (err) {
-      showMsg(err.message, true);
-    } finally {
+      showMsg(err.message || "Failed to initiate recharge order.", true);
       setWalletLoading(false);
     }
   };

@@ -1,4 +1,19 @@
 const { pool } = require('../config/supabase');
+const crypto = require('crypto');
+const Razorpay = require('razorpay');
+
+// Helper to get configured Razorpay instance
+const getRazorpayInstance = () => {
+  const keyId = process.env.RAZORPAY_KEY_ID;
+  const keySecret = process.env.RAZORPAY_KEY_SECRET;
+  if (!keyId || !keySecret || keyId.includes('YOUR_RAZORPAY') || keySecret.includes('YOUR_RAZORPAY')) {
+    return null;
+  }
+  return new Razorpay({
+    key_id: keyId,
+    key_secret: keySecret
+  });
+};
 
 async function getWalletBalance(req, res) {
   const userId = req.user.id;
@@ -152,4 +167,117 @@ async function getUnpaidBookings(req, res) {
   }
 }
 
-module.exports = { getWalletBalance, rechargeWallet, payBooking, getUnpaidBookings };
+async function createRechargeOrder(req, res) {
+  const userId = req.user.id;
+  const { amount } = req.body;
+  const parsedAmount = parseFloat(amount);
+  
+  if (!parsedAmount || parsedAmount <= 0) {
+    return res.status(400).json({ error: 'Invalid recharge amount.' });
+  }
+
+  const rzp = getRazorpayInstance();
+  if (!rzp) {
+    console.warn('Razorpay keys not configured. Running in SIMULATION MODE.');
+    return res.json({
+      isSimulation: true,
+      keyId: 'MOCK_KEY_ID',
+      amount: Math.round(parsedAmount * 100),
+      currency: 'INR',
+      orderId: `order_sim_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    });
+  }
+
+  try {
+    const options = {
+      amount: Math.round(parsedAmount * 100),
+      currency: 'INR',
+      receipt: `recharge_rcpt_${userId}_${Date.now()}`
+    };
+    
+    const order = await rzp.orders.create(options);
+    res.json({
+      isSimulation: false,
+      keyId: process.env.RAZORPAY_KEY_ID,
+      amount: order.amount,
+      currency: order.currency,
+      orderId: order.id
+    });
+  } catch (error) {
+    console.error('Error creating Razorpay order:', error);
+    res.status(500).json({ error: 'Failed to create Razorpay payment order. ' + error.message });
+  }
+}
+
+async function verifyRechargePayment(req, res) {
+  const userId = req.user.id;
+  const { 
+    amount, 
+    razorpayPaymentId, 
+    razorpayOrderId, 
+    razorpaySignature,
+    isSimulation 
+  } = req.body;
+
+  const parsedAmount = parseFloat(amount);
+  if (!parsedAmount || parsedAmount <= 0) {
+    return res.status(400).json({ error: 'Invalid recharge amount.' });
+  }
+
+  try {
+    if (isSimulation) {
+      console.log('Verifying recharge payment (SIMULATION MODE)');
+    } else {
+      if (!razorpayPaymentId || !razorpayOrderId || !razorpaySignature) {
+        return res.status(400).json({ error: 'Missing Razorpay signature verification parameters.' });
+      }
+      
+      const keySecret = process.env.RAZORPAY_KEY_SECRET;
+      const hmac = crypto.createHmac('sha256', keySecret);
+      hmac.update(razorpayOrderId + '|' + razorpayPaymentId);
+      const generatedSignature = hmac.digest('hex');
+      
+      if (generatedSignature !== razorpaySignature) {
+        return res.status(400).json({ error: 'Razorpay signature verification failed. Unauthorized transaction.' });
+      }
+    }
+
+    await pool.query('BEGIN');
+    
+    await pool.query(
+      'UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id = $2',
+      [parsedAmount, userId]
+    );
+    
+    await pool.query(
+      'INSERT INTO wallet_transactions (user_id, amount, type, description) VALUES ($1, $2, $3, $4)',
+      [
+        userId, 
+        parsedAmount, 
+        'Recharge', 
+        `Wallet recharged with $${parsedAmount.toFixed(2)} via Razorpay (${isSimulation ? 'Simulated' : razorpayPaymentId})`
+      ]
+    );
+    
+    await pool.query('COMMIT');
+    
+    const newBalanceRes = await pool.query('SELECT wallet_balance FROM users WHERE id = $1', [userId]);
+    res.json({ 
+      message: 'Wallet recharged successfully', 
+      balance: newBalanceRes.rows[0].wallet_balance 
+    });
+  } catch (error) {
+    await pool.query('ROLLBACK');
+    console.error('Error verifying recharge payment:', error);
+    res.status(500).json({ error: 'Failed to process recharge payment.' });
+  }
+}
+
+module.exports = { 
+  getWalletBalance, 
+  rechargeWallet, 
+  payBooking, 
+  getUnpaidBookings,
+  createRechargeOrder,
+  verifyRechargePayment
+};
