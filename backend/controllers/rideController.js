@@ -214,10 +214,10 @@ async function completeOrDeleteRide(req, res) {
     }
 
     if (action === 'Delete') {
-      await pool.query('DELETE FROM rides WHERE id = $1', [id]);
-      res.json({ message: 'Ride deleted successfully' });
+      await pool.query("UPDATE rides SET status = 'Cancelled' WHERE id = $1", [id]);
+      res.json({ message: 'Ride cancelled successfully' });
     } else if (action === 'Complete') {
-      await pool.query('UPDATE rides SET status = $1 WHERE id = $2', ['Completed', id]);
+      await pool.query("UPDATE rides SET status = 'Completed' WHERE id = $1", [id]);
       res.json({ message: 'Ride marked as completed' });
     } else {
       res.status(400).json({ error: 'Invalid action' });
