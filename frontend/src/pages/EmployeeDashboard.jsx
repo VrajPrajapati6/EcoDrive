@@ -2671,6 +2671,10 @@ export default function EmployeeDashboard() {
                   </div>
 
                   <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", fontSize: "0.95rem" }}>
+                    {selectedHistoryRide.user_role === "Passenger" && (
+                      <div><b>Driver Name:</b> {selectedHistoryRide.driver_name}</div>
+                    )}
+                    <div><b>Vehicle:</b> {selectedHistoryRide.vehicle_make} {selectedHistoryRide.vehicle_license_plate ? `[${selectedHistoryRide.vehicle_license_plate}]` : ""}</div>
                     <div><b>Pickup Point:</b> {selectedHistoryRide.my_pickup_location || selectedHistoryRide.pickup_location}</div>
                     <div><b>Destination Point:</b> {selectedHistoryRide.destination}</div>
                     {selectedHistoryRide.user_role === "Passenger" && selectedHistoryRide.my_distance_km && (
