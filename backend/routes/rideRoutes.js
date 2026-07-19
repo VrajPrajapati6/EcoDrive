@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { offerRide, searchRides, bookRide, getRideHistory, completeOrDeleteRide, updateBookingStatus, startRide } = require('../controllers/rideController');
+const { offerRide, searchRides, bookRide, getRideHistory, completeOrDeleteRide, updateBookingStatus, startRide, getBookingMessages } = require('../controllers/rideController');
 const { authenticateToken } = require('../middleware/authMiddleware');
 
 router.use(authenticateToken);
@@ -12,6 +12,7 @@ router.get('/history', getRideHistory);
 router.put('/:id/complete', completeOrDeleteRide);
 router.put('/:id/start', startRide);
 router.put('/bookings/:bookingId/status', updateBookingStatus);
+router.get('/bookings/:bookingId/messages', getBookingMessages);
 
 router.get('/:id/messages', async (req, res) => {
   console.log(`[backend] Fetching messages for ride ID: ${req.params.id}`);

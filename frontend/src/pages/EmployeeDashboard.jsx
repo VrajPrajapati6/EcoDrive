@@ -16,6 +16,7 @@ import {
   createRechargeOrder,
   verifyRechargePayment,
   getRideMessages,
+  getBookingMessages,
 } from "../services/api";
 import {
   Car,
@@ -39,6 +40,8 @@ import {
   PlayCircle,
   Zap,
   ReceiptText,
+  Check,
+  CheckCheck,
 } from "lucide-react";
 import LocationAutocomplete from "../components/LocationAutocomplete";
 import MapDisplay from "../components/MapDisplay";
@@ -107,53 +110,253 @@ const fetchMultiStopDistance = async (stops) => {
 export default function EmployeeDashboard() {
   const { user } = useAuth();
 
-  // State for socket.io live chat & voice call
-  const [activeCommRide, setActiveCommRide] = useState(null);
+  // State for socket.io live chat
+  const [activeChat, setActiveChat] = useState(null);
   const [socket, setSocket] = useState(null);
   const [chatMessages, setChatMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
+  const [peerOnlineStatus, setPeerOnlineStatus] = useState("Offline");
+  const [peerLastSeen, setPeerLastSeen] = useState(null);
+  const [peerTyping, setPeerTyping] = useState(false);
+  const [isTypingLocal, setIsTypingLocal] = useState(false);
+  const [socketConnected, setSocketConnected] = useState(false);
 
-  // WebRTC voice call logic has been removed as per user request
+  const typingTimeoutRef = useRef(null);
+  const messagesEndRef = useRef(null);
 
-  const handleOpenCommHub = async (ride) => {
-    setActiveCommRide(ride);
-    try {
-      const messages = await getRideMessages(ride.id);
-      setChatMessages(messages);
-    } catch (e) {
-      console.error('Failed to fetch chat messages:', e);
-      setChatMessages([]);
-    }
-
-    // Connect to backend port 5000 (standard for local backend)
-    const socketUrl =
-      window.location.protocol + "//" + window.location.hostname + ":5000";
+  // Set up persistent socket connection on component mount
+  useEffect(() => {
+    if (!user) return;
+    const socketUrl = window.location.protocol + "//" + window.location.hostname + ":5000";
     const s = io(socketUrl);
     setSocket(s);
 
-    s.emit("join_ride", {
-      rideId: ride.id,
-      userId: user.id,
-      userName: user.fullName,
+    s.on("connect", () => {
+      console.log("Socket connected, registering user:", user.id);
+      setSocketConnected(true);
+      s.emit("register_user", { userId: user.id });
     });
 
-    s.on("receive_message", (msg) => {
-      setChatMessages((prev) => [...prev, msg]);
+    s.on("disconnect", () => {
+      console.log("Socket disconnected");
+      setSocketConnected(false);
     });
 
-    // Passenger receives live vehicle location from driver
-    s.on("location_updated", ({ lat, lon, eta }) => {
-      setVehicleLiveCoords(prev => ({ ...prev, [ride.id]: { lat, lon, eta } }));
+    s.on("user_presence", ({ userId, status, lastActive }) => {
+      if (activeChat && String(userId) === String(activeChat.peer_id)) {
+        setPeerOnlineStatus(status);
+        if (lastActive) {
+          setPeerLastSeen(new Date(lastActive).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+        }
+      }
     });
+
+    return () => {
+      s.disconnect();
+    };
+  }, [user, activeChat?.peer_id]);
+
+  // Handle active conversation updates
+  useEffect(() => {
+    if (!socket || !activeChat) return;
+
+    const onReceiveMessage = (msg) => {
+      if (Number(msg.bookingId) === Number(activeChat.booking_id)) {
+        setChatMessages((prev) => {
+          // Prevent duplicates
+          if (prev.some(m => m.id === msg.id || (msg.clientId && m.clientId === msg.clientId))) {
+            return prev;
+          }
+          return [...prev, msg];
+        });
+
+        // Auto-read peer's incoming message
+        if (msg.senderId !== user.id) {
+          socket.emit("read_booking_messages", {
+            bookingId: activeChat.booking_id,
+            userId: user.id
+          });
+        }
+      }
+    };
+
+    const onTypingStatus = ({ bookingId, isTyping, userName }) => {
+      if (Number(bookingId) === Number(activeChat.booking_id)) {
+        setPeerTyping(isTyping);
+      }
+    };
+
+    const onMessagesReadReceipt = ({ bookingId, readBy }) => {
+      if (Number(bookingId) === Number(activeChat.booking_id) && readBy !== user.id) {
+        setChatMessages((prev) =>
+          prev.map((m) => (m.senderId === user.id ? { ...m, status: "Read" } : m))
+        );
+      }
+    };
+
+    const onMessageStatusUpdate = ({ messageId, status }) => {
+      setChatMessages((prev) =>
+        prev.map((m) => (m.id === messageId ? { ...m, status } : m))
+      );
+    };
+
+    socket.on("receive_booking_message", onReceiveMessage);
+    socket.on("typing_status", onTypingStatus);
+    socket.on("messages_read_receipt", onMessagesReadReceipt);
+    socket.on("message_status_update", onMessageStatusUpdate);
+
+    return () => {
+      socket.off("receive_booking_message", onReceiveMessage);
+      socket.off("typing_status", onTypingStatus);
+      socket.off("messages_read_receipt", onMessagesReadReceipt);
+      socket.off("message_status_update", onMessageStatusUpdate);
+    };
+  }, [socket, activeChat, user.id]);
+
+  // Auto-scroll when messages load or change
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [chatMessages, peerTyping]);
+
+  const handleOpenBookingChat = async (riderOrRide, rideContext = null) => {
+    let context = {};
+    if (rideContext) {
+      // Driver clicked Chat next to passenger
+      context = {
+        booking_id: riderOrRide.id,
+        ride_id: rideContext.id,
+        passenger_id: riderOrRide.passenger_id,
+        passenger_name: riderOrRide.passenger_name,
+        driver_id: rideContext.driver_id,
+        driver_name: user.fullName,
+        peer_id: riderOrRide.passenger_id,
+        peer_name: riderOrRide.passenger_name,
+        peer_role: "Passenger",
+        ride_status: rideContext.status,
+        pickup_location: riderOrRide.pickup_location,
+        destination: rideContext.destination
+      };
+    } else {
+      // Passenger clicked Communicate on ride card
+      context = {
+        booking_id: riderOrRide.booking_id,
+        ride_id: riderOrRide.id,
+        passenger_id: user.id,
+        passenger_name: user.fullName,
+        driver_id: riderOrRide.driver_id,
+        driver_name: riderOrRide.driver_name,
+        peer_id: riderOrRide.driver_id,
+        peer_name: riderOrRide.driver_name,
+        peer_role: "Driver",
+        ride_status: riderOrRide.status,
+        pickup_location: riderOrRide.pickup_location,
+        destination: riderOrRide.destination
+      };
+    }
+
+    setActiveChat(context);
+
+    // Join room
+    if (socket) {
+      socket.emit("join_booking_chat", {
+        bookingId: context.booking_id,
+        userId: user.id,
+        userName: user.fullName
+      });
+
+      // Check current online presence
+      socket.emit("check_user_presence", { targetUserId: context.peer_id }, (res) => {
+        if (res && res.status) {
+          setPeerOnlineStatus(res.status);
+        }
+      });
+    }
+
+    // Load message history
+    try {
+      const messages = await getBookingMessages(context.booking_id);
+      setChatMessages(messages);
+      
+      // Mark messages as read on load
+      if (socket) {
+        socket.emit("read_booking_messages", {
+          bookingId: context.booking_id,
+          userId: user.id
+        });
+      }
+    } catch (e) {
+      console.error("Failed to load chat history:", e);
+      setChatMessages([]);
+    }
   };
 
-  const handleCloseCommHub = () => {
-    if (socket) {
-      socket.disconnect();
-    }
-    setSocket(null);
-    setActiveCommRide(null);
+  const handleCloseBookingChat = () => {
+    setActiveChat(null);
     setChatMessages([]);
+    setPeerTyping(false);
+  };
+
+  const handleInputChange = (e) => {
+    setNewMessage(e.target.value);
+    if (!socket || !activeChat) return;
+
+    if (!isTypingLocal) {
+      setIsTypingLocal(true);
+      socket.emit("typing_status", {
+        bookingId: activeChat.booking_id,
+        isTyping: true,
+        userName: user.fullName
+      });
+    }
+
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      setIsTypingLocal(false);
+      socket.emit("typing_status", {
+        bookingId: activeChat.booking_id,
+        isTyping: false,
+        userName: user.fullName
+      });
+    }, 2000);
+  };
+
+  const handleSendBookingMessage = (e) => {
+    e.preventDefault();
+    if (!newMessage.trim() || !socket || !activeChat) return;
+
+    const clientId = Math.random().toString(36).substring(2, 15) + Date.now();
+    const tempMsg = {
+      id: clientId,
+      clientId,
+      bookingId: activeChat.booking_id,
+      message: newMessage,
+      senderId: user.id,
+      senderName: "You",
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      status: "Sent"
+    };
+
+    setChatMessages((prev) => [...prev, tempMsg]);
+
+    socket.emit("send_booking_message", {
+      bookingId: activeChat.booking_id,
+      message: newMessage,
+      senderId: user.id,
+      senderName: user.fullName,
+      clientId
+    });
+
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    setIsTypingLocal(false);
+    socket.emit("typing_status", {
+      bookingId: activeChat.booking_id,
+      isTyping: false,
+      userName: user.fullName
+    });
+
+    setNewMessage("");
   };
 
   const [activeTab, setActiveTab] = useState("find"); // find, current, offer, history, vehicles, wallet, payment
@@ -1512,13 +1715,6 @@ export default function EmployeeDashboard() {
                             Complete Ride
                           </button>
                           <button
-                            className="btn btn-teal"
-                            style={{ fontSize: "0.85rem", padding: "0.5rem 1rem" }}
-                            onClick={() => handleOpenCommHub(ride)}
-                          >
-                            Communicate
-                          </button>
-                          <button
                             className="btn btn-outline"
                             style={{ fontSize: "0.85rem", padding: "0.5rem 1rem", color: "#dc3545", borderColor: "#dc3545" }}
                             onClick={() => handleRideAction(ride.id, "Delete")}
@@ -1607,6 +1803,21 @@ export default function EmployeeDashboard() {
                                         }}
                                       >
                                         Pickup: {rider.pickup_location}
+                                       <div style={{ marginTop: "6px" }}>
+                                         <button
+                                           className="btn btn-teal"
+                                           style={{
+                                             fontSize: "0.75rem",
+                                             padding: "0.25rem 0.5rem",
+                                             display: "inline-flex",
+                                             alignItems: "center",
+                                             gap: "4px"
+                                           }}
+                                           onClick={() => handleOpenBookingChat(rider, ride)}
+                                         >
+                                           💬 Chat
+                                         </button>
+                                       </div>
                                       </div>
                                     </div>
                                     <div style={{ textAlign: "right" }}>
@@ -1953,18 +2164,19 @@ export default function EmployeeDashboard() {
                           >
                             Cancel Request
                           </button>
-                          {(ride.booking_status === "Confirmed" && (ride.status === "Open" || ride.status === "In Progress")) && (
-                            <button
-                              className="btn btn-teal"
-                              style={{
-                                fontSize: "0.85rem",
-                                padding: "0.5rem 1rem",
-                              }}
-                              onClick={() => handleOpenCommHub(ride)}
-                            >
-                              Communicate
-                            </button>
-                          )}
+                           {(ride.booking_status === "Confirmed" && (ride.status === "Open" || ride.status === "In Progress")) && (
+                             <button
+                               className="btn btn-teal"
+                               style={{
+                                 fontSize: "0.85rem",
+                                 padding: "0.5rem 1rem",
+                                 marginLeft: "0.5rem"
+                               }}
+                               onClick={() => handleOpenBookingChat(ride)}
+                             >
+                               Communicate
+                             </button>
+                           )}
                           {isConfirmed && ride.payment_status !== "Paid" && (
                             <button
                               className="btn btn-primary animate-pulse"
@@ -2566,13 +2778,10 @@ export default function EmployeeDashboard() {
                             <CreditCard size={14} /> Pay (${Number(ride.my_fare).toFixed(2)})
                           </button>
                         )}
-                      {((ride.user_role === "Driver" &&
+                      {(ride.user_role === "Passenger" &&
+                        ride.booking_status === "Confirmed" &&
                         (ride.status === "Open" ||
-                          ride.status === "In Progress")) ||
-                        (ride.user_role === "Passenger" &&
-                          ride.booking_status === "Confirmed" &&
-                          (ride.status === "Open" ||
-                            ride.status === "In Progress"))) && (
+                          ride.status === "In Progress")) && (
                           <button
                             className="btn btn-teal"
                             style={{
@@ -2582,7 +2791,7 @@ export default function EmployeeDashboard() {
                               fontSize: "0.85rem",
                               padding: "0.5rem 1rem",
                             }}
-                            onClick={() => handleOpenCommHub(ride)}
+                            onClick={() => handleOpenBookingChat(ride)}
                           >
                             Communicate
                           </button>
@@ -3018,9 +3227,7 @@ export default function EmployeeDashboard() {
           </div>
         )}
 
-        {/* COMM HUB OVERLAY DRAWER */}
-
-        {activeCommRide && (
+        {activeChat && (
           <div
             style={{
               position: "fixed",
@@ -3036,7 +3243,7 @@ export default function EmployeeDashboard() {
             }}
           >
             <div
-              className="odoo-card"
+              className="odoo-card animate-slide-in"
               style={{
                 width: "450px",
                 height: "100%",
@@ -3047,6 +3254,7 @@ export default function EmployeeDashboard() {
                 padding: "1.5rem",
                 boxShadow: "-4px 0 20px rgba(0,0,0,0.15)",
                 boxSizing: "border-box",
+                background: "#f0f2f5"
               }}
             >
               {/* Header */}
@@ -3060,68 +3268,53 @@ export default function EmployeeDashboard() {
                   marginBottom: "1rem",
                 }}
               >
-                <div>
-                  <h3 style={{ margin: 0, color: "var(--odoo-violet)" }}>
-                    💬 Comm Hub
-                  </h3>
-                  <span
-                    style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <div
+                    style={{
+                      width: "40px",
+                      height: "40px",
+                      borderRadius: "50%",
+                      background: "var(--odoo-violet)",
+                      color: "white",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontWeight: 700,
+                      fontSize: "1.1rem"
+                    }}
                   >
-                    {activeCommRide.pickup_location} →{" "}
-                    {activeCommRide.destination}
-                  </span>
+                    {activeChat.peer_name.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <h4 style={{ margin: 0, color: "var(--odoo-violet)", fontSize: "1.1rem", display: "flex", alignItems: "center", gap: "6px" }}>
+                      {activeChat.peer_name}
+                      <span style={{ fontSize: "0.75rem", padding: "2px 6px", borderRadius: "10px", background: "#e9ecef", color: "#495057", fontWeight: 500 }}>
+                        {activeChat.peer_role}
+                      </span>
+                    </h4>
+                    <div style={{ display: "flex", alignItems: "center", gap: "5px", marginTop: "3px" }}>
+                      <span
+                        style={{
+                          width: "8px",
+                          height: "8px",
+                          background: peerOnlineStatus === "Online" ? "#2b8a3e" : "#adb5bd",
+                          borderRadius: "50%",
+                          display: "inline-block",
+                        }}
+                      ></span>
+                      <span style={{ fontSize: "0.78rem", color: "var(--text-muted)", fontWeight: 500 }}>
+                        {peerOnlineStatus === "Online" ? "Online" : peerLastSeen ? `Offline • Last seen ${peerLastSeen}` : "Offline"}
+                      </span>
+                    </div>
+                  </div>
                 </div>
                 <button
                   className="btn btn-outline"
                   style={{ padding: "0.3rem 0.6rem" }}
-                  onClick={handleCloseCommHub}
+                  onClick={handleCloseBookingChat}
                 >
                   Close
                 </button>
-              </div>
-
-
-                <div style={{ display: "flex", gap: "0.5rem" }}>
-                  {!isInVoiceCall ? (
-                    <button
-                      className="btn btn-teal"
-                      style={{ flex: 1, padding: "0.6rem", fontSize: "0.85rem" }}
-                      onClick={handleJoinVoiceCall}
-                    >
-                      🔊 Join Voice Call
-                    </button>
-                  ) : (
-                    <>
-                      <button
-                        className="btn btn-outline"
-                        style={{
-                          flex: 1,
-                          padding: "0.6rem",
-                          fontSize: "0.85rem",
-                          color: isMuted ? "#37b24d" : "#e67e22",
-                          borderColor: isMuted ? "#37b24d" : "#e67e22"
-                        }}
-                        onClick={handleToggleMute}
-                      >
-                        {isMuted ? "🎙️ Unmute Mic" : "🔇 Mute Mic"}
-                      </button>
-                      <button
-                        className="btn"
-                        style={{
-                          flex: 1,
-                          padding: "0.6rem",
-                          fontSize: "0.85rem",
-                          background: "#fa5252",
-                          color: "white",
-                          border: "none"
-                        }}
-                        onClick={handleLeaveVoiceCall}
-                      >
-                        🔴 Leave Call
-                      </button>
-                    </>
-                  )}
-                </div>
               </div>
 
               {/* Chat Area */}
@@ -3129,7 +3322,9 @@ export default function EmployeeDashboard() {
                 style={{
                   flex: 1,
                   overflowY: "auto",
-                  background: "#f8f9fa",
+                  background: "#efeae2", // WhatsApp chat background style
+                  backgroundImage: "radial-gradient(rgba(0,0,0,0.08) 1px, transparent 0)",
+                  backgroundSize: "20px 20px",
                   borderRadius: "8px",
                   border: "1px solid var(--border-color)",
                   padding: "1rem",
@@ -3143,71 +3338,118 @@ export default function EmployeeDashboard() {
                   <div
                     style={{
                       textAlign: "center",
-                      color: "var(--text-muted)",
-                      marginTop: "2rem",
+                      color: "#667781",
+                      marginTop: "4rem",
                       fontSize: "0.85rem",
+                      background: "white",
+                      padding: "1rem",
+                      borderRadius: "8px",
+                      boxShadow: "0 1px 2px rgba(0,0,0,0.05)"
                     }}
                   >
-                    No messages yet. Send a text or use Push-to-Talk to speak!
+                    🔒 Messages are end-to-end persistent and secure. Start messaging below.
                   </div>
                 ) : (
-                  chatMessages.map((msg, index) => {
-                    const isMe =
-                      msg.senderId === user.id || msg.senderName === "You";
+                  chatMessages.map((msg) => {
+                    const isMe = String(msg.senderId) === String(user.id) || msg.senderName === "You";
                     return (
                       <div
-                        key={msg.id || index}
+                        key={msg.id}
                         style={{
                           alignSelf: isMe ? "flex-end" : "flex-start",
-                          maxWidth: "85%",
+                          maxWidth: "80%",
                         }}
                       >
                         <div
                           style={{
-                            fontSize: "0.75rem",
-                            color: "var(--text-muted)",
-                            marginBottom: "2px",
-                            textAlign: isMe ? "right" : "left",
+                            background: isMe ? "#d9fdd3" : "white", // WhatsApp light green and white
+                            color: "black",
+                            padding: "0.5rem 0.75rem",
+                            borderRadius: "8px",
+                            borderTopRightRadius: isMe ? "0px" : "8px",
+                            borderTopLeftRadius: isMe ? "8px" : "0px",
+                            boxShadow: "0 1px 1px rgba(0,0,0,0.1)",
+                            display: "flex",
+                            flexDirection: "column",
                           }}
                         >
-                          {msg.senderName} • {msg.timestamp}
-                        </div>
-                        <div
-                          style={{
-                            background: isMe ? "var(--odoo-violet)" : "white",
-                            color: isMe ? "white" : "black",
-                            padding: "0.65rem 0.85rem",
-                            borderRadius: "12px",
-                            borderTopRightRadius: isMe ? "2px" : "12px",
-                            borderTopLeftRadius: isMe ? "12px" : "2px",
-                            boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-                            border: isMe ? "none" : "1px solid #dee2e6",
-                          }}
-                        >
-                          {msg.message}
+                          {!isMe && (
+                            <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--odoo-violet)", marginBottom: "3px" }}>
+                              {msg.senderName}
+                            </span>
+                          )}
+                          <span style={{ fontSize: "0.92rem", wordBreak: "break-word" }}>{msg.message}</span>
+                          <span
+                            style={{
+                              fontSize: "0.68rem",
+                              color: "#667781",
+                              alignSelf: "flex-end",
+                              marginTop: "4px",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "3px"
+                            }}
+                          >
+                            {msg.timestamp}
+                            {isMe && (
+                              <span>
+                                {msg.status === "Read" ? (
+                                  <CheckCheck size={14} color="#53bdeb" />
+                                ) : msg.status === "Delivered" ? (
+                                  <CheckCheck size={14} color="#8696a0" />
+                                ) : (
+                                  <Check size={14} color="#8696a0" />
+                                )}
+                              </span>
+                            )}
+                          </span>
                         </div>
                       </div>
                     );
                   })
                 )}
+
+                {/* Other User Typing indicator bubble */}
+                {peerTyping && (
+                  <div style={{ alignSelf: "flex-start", maxWidth: "80%" }}>
+                    <div
+                      style={{
+                        background: "white",
+                        color: "#667781",
+                        padding: "0.5rem 0.75rem",
+                        borderRadius: "8px",
+                        borderTopLeftRadius: "0px",
+                        boxShadow: "0 1px 1px rgba(0,0,0,0.1)",
+                        fontSize: "0.85rem",
+                        fontStyle: "italic",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px"
+                      }}
+                    >
+                      <span className="typing-dots">
+                        <span>.</span><span>.</span><span>.</span>
+                      </span>
+                      {activeChat.peer_name} is typing
+                    </div>
+                  </div>
+                )}
+
+                {/* Auto-scroll anchor */}
+                <div ref={messagesEndRef} />
               </div>
 
-              {/* Input & Record Form */}
+              {/* Read Only Notice if Completed or Cancelled */}
+              {(activeChat.ride_status === "Completed" || activeChat.ride_status === "Cancelled") && (
+                <div style={{ background: "#e9ecef", color: "#495057", padding: "0.65rem 1rem", borderRadius: "8px", fontSize: "0.85rem", textAlign: "center", marginBottom: "0.85rem", fontWeight: 600 }}>
+                  🔒 This ride is {activeChat.ride_status.toLowerCase()}. Conversation is archived.
+                </div>
+              )}
+
+              {/* Input Form */}
               <div>
-                {/* Text Input */}
                 <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    if (!newMessage.trim() || !socket || !activeCommRide)
-                      return;
-                    socket.emit("send_message", {
-                      rideId: activeCommRide.id,
-                      message: newMessage,
-                      senderId: user.id,
-                      senderName: user.fullName,
-                    });
-                    setNewMessage("");
-                  }}
+                  onSubmit={handleSendBookingMessage}
                   style={{ display: "flex", gap: "0.5rem" }}
                 >
                   <input
@@ -3215,19 +3457,22 @@ export default function EmployeeDashboard() {
                     className="form-control"
                     placeholder="Type a message..."
                     value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    style={{ borderRadius: "8px" }}
+                    onChange={handleInputChange}
+                    disabled={activeChat.ride_status === "Completed" || activeChat.ride_status === "Cancelled"}
+                    style={{ borderRadius: "20px", padding: "0.6rem 1rem", background: "white", border: "1px solid #e9ecef" }}
                   />
                   <button
                     type="submit"
                     className="btn btn-teal"
-                    style={{ padding: "0 1.25rem", borderRadius: "8px" }}
+                    disabled={!newMessage.trim() || activeChat.ride_status === "Completed" || activeChat.ride_status === "Cancelled"}
+                    style={{ padding: "0 1.25rem", borderRadius: "20px", background: "var(--odoo-violet)", borderColor: "var(--odoo-violet)" }}
                   >
                     Send
                   </button>
                 </form>
               </div>
             </div>
+          </div>
         )}
 
         {/* Reusable Payment Checkout Modal for other tabs */}

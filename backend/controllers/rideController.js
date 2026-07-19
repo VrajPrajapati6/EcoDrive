@@ -142,7 +142,7 @@ async function getRideHistory(req, res) {
   try {
     // Rides where user is driver
     const drivenRidesRes = await pool.query(`
-      SELECT r.id, r.pickup_location, r.destination, r.departure_date, r.departure_time, r.available_seats, r.fare_per_seat, r.status, r.cancellation_reason, r.pickup_lat, r.pickup_lon, r.destination_lat, r.destination_lon,
+      SELECT r.id, r.pickup_location, r.destination, r.departure_date, r.departure_time, r.available_seats, r.fare_per_seat, r.status, r.cancellation_reason, r.pickup_lat, r.pickup_lon, r.destination_lat, r.destination_lon, r.driver_id,
              'Driver' as user_role, v.make_model as vehicle_make, v.license_plate as vehicle_license_plate
       FROM rides r
       INNER JOIN vehicles v ON r.vehicle_id = v.id
@@ -167,7 +167,7 @@ async function getRideHistory(req, res) {
     // Rides where user is passenger
     const passengerRidesRes = await pool.query(`
       SELECT r.id, r.pickup_location, r.destination, r.departure_date, r.departure_time, r.fare_per_seat, r.status, 
-             r.pickup_lat, r.pickup_lon, r.destination_lat, r.destination_lon,
+             r.pickup_lat, r.pickup_lon, r.destination_lat, r.destination_lon, r.driver_id,
              'Passenger' as user_role, u.full_name as driver_name, u.phone as driver_phone, 
              v.make_model as vehicle_make, v.license_plate as vehicle_license_plate,
              b.seats_booked, b.status as booking_status, b.pickup_location as my_pickup_location, 
@@ -346,6 +346,41 @@ async function startRide(req, res) {
   }
 }
 
+async function getBookingMessages(req, res) {
+  const { bookingId } = req.params;
+  const userId = req.user.id;
+
+  try {
+    const bookingRes = await pool.query(`
+      SELECT b.id, b.passenger_id, r.driver_id
+      FROM bookings b
+      JOIN rides r ON b.ride_id = r.id
+      WHERE b.id = $1
+    `, [bookingId]);
+
+    if (bookingRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Booking not found.' });
+    }
+
+    const booking = bookingRes.rows[0];
+    if (Number(booking.passenger_id) !== Number(userId) && Number(booking.driver_id) !== Number(userId)) {
+      return res.status(403).json({ error: 'Unauthorized to view this conversation.' });
+    }
+
+    const result = await pool.query(`
+      SELECT id, sender_id as "senderId", sender_name as "senderName", message, status, timestamp, client_id as "clientId", created_at
+      FROM ride_messages 
+      WHERE booking_id = $1 
+      ORDER BY created_at ASC
+    `, [bookingId]);
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching booking messages:', error);
+    res.status(500).json({ error: 'Failed to fetch messages.' });
+  }
+}
+
 module.exports = {
   offerRide,
   searchRides,
@@ -353,5 +388,6 @@ module.exports = {
   getRideHistory,
   completeOrDeleteRide,
   updateBookingStatus,
-  startRide
+  startRide,
+  getBookingMessages
 };

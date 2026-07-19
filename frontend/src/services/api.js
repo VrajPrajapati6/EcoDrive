@@ -44,6 +44,7 @@ export async function getRideHistory() { return request('/rides/history'); }
 export async function completeOrDeleteRide(id, action, reason) { return request(`/rides/${id}/complete`, { method: 'PUT', body: JSON.stringify({ action, reason }) }); }
 export async function updateBookingStatus(bookingId, status, reason) { return request(`/rides/bookings/${bookingId}/status`, { method: 'PUT', body: JSON.stringify({ status, reason }) }); }
 export async function getRideMessages(rideId) { return request(`/rides/${rideId}/messages`); }
+export async function getBookingMessages(bookingId) { return request(`/rides/bookings/${bookingId}/messages`); }
 // Admin
 export async function getOrganizationRidesReport() { return request('/admin/reports/rides'); }
 export async function getOrganizationEmployees() { return request('/admin/employees'); }
