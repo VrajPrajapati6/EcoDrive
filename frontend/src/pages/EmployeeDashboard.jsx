@@ -454,15 +454,6 @@ export default function EmployeeDashboard() {
   const [recurringRequests, setRecurringRequests] = useState([]);
 
 
-  // Recurring Rides
-  const [isRecurring, setIsRecurring] = useState(false);
-  const [recurringDays, setRecurringDays] = useState([]);
-  const [reqPickup, setReqPickup] = useState("");
-  const [reqDest, setReqDest] = useState("");
-  const [reqTime, setReqTime] = useState("");
-  const [reqSeats, setReqSeats] = useState(1);
-  const [recurringRequests, setRecurringRequests] = useState([]);
-
   const [success, setSuccess] = useState("");
 
   // Calculate detour distances for pending requests
@@ -597,7 +588,6 @@ export default function EmployeeDashboard() {
       setSuccess("");
     }, 4000);
   };
-
   const loadRecurringRequests = async () => {
     try {
       const res = await fetch("http://localhost:5000/api/rides/recurring", {
@@ -609,21 +599,6 @@ export default function EmployeeDashboard() {
       }
     } catch (error) {
       console.error("Error fetching recurring requests:", error);
-    }
-  };
-
-  
-  const loadRecurringRequests = async () => {
-    try {
-      const res = await fetch('http://localhost:5000/api/rides/recurring', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setRecurringRequests(data);
-      }
-    } catch (error) {
-      console.error('Error fetching recurring requests:', error);
     }
   };
 
@@ -883,27 +858,6 @@ export default function EmployeeDashboard() {
       showMsg(err.message, true);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleAcceptRecurring = async (reqId) => {
-    try {
-      const res = await fetch(
-        `http://localhost:5000/api/rides/recurring/${reqId}/accept`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      );
-      if (res.ok) {
-        alert("Recurring request accepted!");
-        loadRecurringRequests();
-      } else {
-        const err = await res.json();
-        alert(err.error || "Failed to accept request");
-      }
-    } catch (error) {
-      console.error(error);
     }
   };
 
@@ -1373,6 +1327,7 @@ export default function EmployeeDashboard() {
                   </div>
                 )}
               </div>
+            </div>
 
             <h3 style={{ marginBottom: "1.5rem", color: "var(--odoo-violet)" }}>
               Available Rides in {user?.organization?.name}
@@ -2751,6 +2706,7 @@ export default function EmployeeDashboard() {
                   </div>
                 </div>
               )}
+            </div>
 
             <h3 style={{ marginBottom: "1.5rem", color: "var(--odoo-teal)" }}>
               Publish a New Ride
