@@ -142,23 +142,37 @@ export default function EmployeeDashboard() {
       setSocketConnected(false);
     });
 
-    s.on("user_presence", ({ userId, status, lastActive }) => {
+    return () => {
+      s.disconnect();
+    };
+  }, [user]);
+
+  // Handle active conversation updates
+  useEffect(() => {
+    if (!socket || !activeChat) return;
+
+    // Join the booking room on the persistent socket
+    socket.emit("join_booking_chat", {
+      bookingId: activeChat.booking_id,
+      userId: user.id,
+      userName: user.fullName
+    });
+
+    // Check current online presence
+    socket.emit("check_user_presence", { targetUserId: activeChat.peer_id }, (res) => {
+      if (res && res.status) {
+        setPeerOnlineStatus(res.status);
+      }
+    });
+
+    const onUserPresence = ({ userId, status, lastActive }) => {
       if (activeChat && String(userId) === String(activeChat.peer_id)) {
         setPeerOnlineStatus(status);
         if (lastActive) {
           setPeerLastSeen(new Date(lastActive).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
         }
       }
-    });
-
-    return () => {
-      s.disconnect();
     };
-  }, [user, activeChat?.peer_id]);
-
-  // Handle active conversation updates
-  useEffect(() => {
-    if (!socket || !activeChat) return;
 
     const onReceiveMessage = (msg) => {
       if (Number(msg.bookingId) === Number(activeChat.booking_id)) {
@@ -200,12 +214,14 @@ export default function EmployeeDashboard() {
       );
     };
 
+    socket.on("user_presence", onUserPresence);
     socket.on("receive_booking_message", onReceiveMessage);
     socket.on("typing_status", onTypingStatus);
     socket.on("messages_read_receipt", onMessagesReadReceipt);
     socket.on("message_status_update", onMessageStatusUpdate);
 
     return () => {
+      socket.off("user_presence", onUserPresence);
       socket.off("receive_booking_message", onReceiveMessage);
       socket.off("typing_status", onTypingStatus);
       socket.off("messages_read_receipt", onMessagesReadReceipt);
