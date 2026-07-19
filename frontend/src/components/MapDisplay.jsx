@@ -257,17 +257,45 @@ export default function MapDisplay({ startCoords, endCoords, confirmedPickups = 
     updateRoutes();
   }, [startCoords, endCoords, confirmedPickups, requestCoords]);
 
+  const [isFullScreen, setIsFullScreen] = React.useState(false);
+
   return (
-    <div 
-      ref={mapRef} 
-      style={{ 
-        height, 
-        width: '100%', 
-        borderRadius: 'var(--radius-md)', 
-        border: '1px solid var(--border-color)',
-        boxShadow: 'var(--shadow-sm)',
-        zIndex: 1
-      }} 
-    />
+    <div style={
+      isFullScreen 
+        ? { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, background: '#ffffff', display: 'flex', flexDirection: 'column' }
+        : { position: 'relative', width: '100%', height }
+    }>
+      <button 
+        type="button"
+        onClick={(e) => { e.preventDefault(); setIsFullScreen(!isFullScreen); setTimeout(() => { if (mapInstance.current) mapInstance.current.invalidateSize(); }, 300); }}
+        style={{
+          position: 'absolute',
+          top: '10px',
+          right: '10px',
+          zIndex: 1000,
+          background: '#000000',
+          color: '#ffffff',
+          border: 'none',
+          padding: '0.6rem 1rem',
+          fontWeight: 700,
+          cursor: 'pointer',
+          textTransform: 'uppercase',
+          letterSpacing: '1px'
+        }}
+      >
+        {isFullScreen ? 'CLOSE MAP' : 'EXPAND MAP'}
+      </button>
+      <div 
+        ref={mapRef} 
+        style={{ 
+          height: isFullScreen ? '100%' : '100%', 
+          width: '100%', 
+          borderRadius: isFullScreen ? '0' : 'var(--radius-md)', 
+          border: isFullScreen ? 'none' : '2px solid #000000',
+          zIndex: 1,
+          flex: 1
+        }} 
+      />
+    </div>
   );
 }

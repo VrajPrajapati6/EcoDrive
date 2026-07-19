@@ -1,12 +1,11 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
-import { LogOut, Building2, UserCheck, Shield } from 'lucide-react';
 
 export default function Navbar({ onNavigate, currentPage }) {
   const { user, logout } = useAuth();
 
   return (
-    <nav className="odoo-navbar">
+    <nav className="odoo-navbar" style={{ background: '#000000', borderBottom: '4px solid var(--odoo-teal)' }}>
       <a 
         href="#" 
         className="odoo-navbar-brand"
@@ -14,36 +13,33 @@ export default function Navbar({ onNavigate, currentPage }) {
           e.preventDefault();
           onNavigate(user ? 'dashboard' : 'auth');
         }}
+        style={{ letterSpacing: '2px', textTransform: 'uppercase' }}
       >
-        <div className="odoo-navbar-logo-icon">E</div>
-        <span>EcoDrive</span>
+        <div className="odoo-navbar-logo-icon" style={{ borderRadius: '0', background: 'var(--odoo-teal)', color: '#ffffff' }}>E</div>
+        <span style={{ fontWeight: 900 }}>EcoDrive</span>
       </a>
 
       <div className="odoo-navbar-links">
         {user ? (
           <>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'rgba(255,255,255,0.12)', padding: '0.35rem 0.85rem', borderRadius: '6px' }}>
-              <Building2 size={16} />
-              <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: '#222222', padding: '0.5rem 1rem', border: '1px solid #444444' }}>
+              <span style={{ fontSize: '0.85rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px' }}>
                 {user.organization?.name || 'My Organization'}
               </span>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              {user.role === 'Company Administrator' ? (
-                <Shield size={16} color="#ffd700" />
-              ) : (
-                <UserCheck size={16} />
-              )}
-              <span style={{ fontSize: '0.9rem' }}>{user.fullName}</span>
+              <span style={{ fontSize: '0.9rem', fontWeight: 700, textTransform: 'uppercase' }}>{user.fullName}</span>
               <span style={{
                 fontSize: '0.7rem',
-                background: user.role === 'Company Administrator' ? 'rgba(255, 215, 0, 0.25)' : 'rgba(255,255,255,0.2)',
-                padding: '0.15rem 0.5rem',
-                borderRadius: '12px',
-                fontWeight: 600
+                background: 'var(--odoo-teal)',
+                color: '#ffffff',
+                padding: '0.2rem 0.5rem',
+                fontWeight: 800,
+                textTransform: 'uppercase',
+                letterSpacing: '1px'
               }}>
-                {user.role === 'Company Administrator' ? 'Admin' : 'Employee'}
+                {user.role === 'Company Administrator' ? 'ADMIN' : 'EMPLOYEE'}
               </span>
             </div>
 
@@ -53,10 +49,9 @@ export default function Navbar({ onNavigate, currentPage }) {
                 onNavigate('auth');
               }}
               className="btn btn-outline-white"
-              style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem' }}
+              style={{ padding: '0.5rem 1rem', fontSize: '0.85rem', borderRadius: '0', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px' }}
             >
-              <LogOut size={14} />
-              <span>Log Out</span>
+              <span>LOG OUT</span>
             </button>
           </>
         ) : (
@@ -64,9 +59,9 @@ export default function Navbar({ onNavigate, currentPage }) {
             <span 
               onClick={() => onNavigate('auth')} 
               className="odoo-nav-link"
-              style={{ fontWeight: currentPage === 'auth' ? 700 : 500 }}
+              style={{ fontWeight: currentPage === 'auth' ? 800 : 600, textTransform: 'uppercase', letterSpacing: '1px' }}
             >
-              Authentication
+              AUTHENTICATION
             </span>
           </>
         )}

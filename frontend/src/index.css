@@ -1,22 +1,22 @@
 :root {
-  --odoo-violet: #714B67;
-  --odoo-violet-dark: #5D3D54;
-  --odoo-violet-light: #8F5B83;
-  --odoo-violet-bg: #f6f0f5;
-  --odoo-teal: #017e84;
-  --odoo-teal-dark: #01686d;
-  --bg-page: #f8f9fa;
+  --odoo-violet: #000000;
+  --odoo-violet-dark: #222222;
+  --odoo-violet-light: #444444;
+  --odoo-violet-bg: #f8f9fa;
+  --odoo-teal: #ff5e00;
+  --odoo-teal-dark: #e05200;
+  --bg-page: #ffffff;
   --bg-card: #ffffff;
-  --text-main: #212529;
-  --text-muted: #6c757d;
-  --border-color: #dee2e6;
-  --border-focus: #714B67;
-  --shadow-sm: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
-  --shadow-md: 0 0.5rem 1rem rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 1rem 3rem rgba(113, 75, 103, 0.15);
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
+  --text-main: #000000;
+  --text-muted: #666666;
+  --border-color: #e5e5e5;
+  --border-focus: #000000;
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 8px 16px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.08);
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
 }
 
 * {
@@ -26,7 +26,15 @@
 }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif;
   background-color: var(--bg-page);
   color: var(--text-main);
   line-height: 1.5;
@@ -190,7 +198,9 @@ body {
   background-clip: padding-box;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
-  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+  transition:
+    border-color 0.15s ease-in-out,
+    box-shadow 0.15s ease-in-out;
 }
 
 .form-control:focus {
@@ -248,13 +258,14 @@ body {
 
 /* Odoo Banner / Hero Header */
 .odoo-hero {
-  background: linear-gradient(135deg, var(--odoo-violet) 0%, #4a2d42 100%);
-  color: white;
-  padding: 3.5rem 2rem;
-  border-radius: var(--radius-md);
+  /* background-color: green; */
+  color: black;
+  padding: 0;
   margin-bottom: 2rem;
   position: relative;
   overflow: hidden;
+  border: 5px solid #000000;
+  border-radius: 20px;
 }
 
 .odoo-hero h1 {
@@ -396,7 +407,9 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  transition: background-color 0.15s ease, color 0.15s ease;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
 }
 
 .autocomplete-item:hover,
@@ -416,3 +429,81 @@ body {
   color: var(--text-muted);
 }
 
+/* Splash Screen */
+.splash-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--odoo-teal);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  flex-direction: column;
+}
+
+.splash-car {
+  width: 100px;
+  height: 40px;
+  background-color: #fff;
+  position: relative;
+  border-radius: 10px 30px 10px 10px;
+  animation: drive 3.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+.splash-car::before,
+.splash-car::after {
+  content: "";
+  position: absolute;
+  bottom: -10px;
+  width: 24px;
+  height: 24px;
+  background-color: var(--text-main);
+  border-radius: 50%;
+  border: 4px solid #fff;
+}
+.splash-car::before {
+  left: 10px;
+}
+.splash-car::after {
+  right: 15px;
+}
+
+@keyframes drive {
+  0% {
+    transform: translateX(-150vw);
+  }
+  35% {
+    transform: translateX(0);
+  }
+  60% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(150vw);
+  }
+}
+
+.splash-logo {
+  font-size: 3rem;
+  font-weight: 900;
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: 4px;
+  position: absolute;
+  opacity: 0;
+  animation: revealLogo 0.5s ease-out forwards;
+  animation-delay: 2.2s; /* reveals right as the car leaves the center */
+}
+
+@keyframes revealLogo {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}

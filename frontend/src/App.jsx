@@ -8,6 +8,14 @@ import AdminDashboard from './pages/AdminDashboard';
 function MainContent() {
   const { user, loading } = useAuth();
   const [currentPage, setCurrentPage] = useState('auth');
+  const [minSplashDone, setMinSplashDone] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setMinSplashDone(true);
+    }, 3500); // Match new animation duration
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -17,28 +25,17 @@ function MainContent() {
     }
   }, [user]);
 
-  if (loading) {
+  if (!minSplashDone || loading) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', flexDirection: 'column', gap: '1rem', background: 'var(--bg-page)' }}>
-        <div style={{
-          width: '48px',
-          height: '48px',
-          borderRadius: '12px',
-          background: 'var(--odoo-violet)',
-          color: 'white',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: '1.5rem',
-          fontWeight: 800
-        }}>
-          E
-        </div>
-        <div style={{ fontWeight: 600, color: 'var(--odoo-violet)', fontSize: '1.1rem' }}>
-          Loading EcoDrive Portal...
-        </div>
+      <div className="splash-container">
+        <div className="splash-car"></div>
+        <div className="splash-logo">Eco-Drive</div>
       </div>
     );
+  }
+
+  if (currentPage === 'auth' || !user) {
+    return <Auth onNavigate={setCurrentPage} />;
   }
 
   return (
@@ -46,9 +43,7 @@ function MainContent() {
       <Navbar onNavigate={setCurrentPage} currentPage={currentPage} />
       
       <main style={{ flex: 1, paddingBottom: '3rem' }}>
-        {currentPage === 'auth' || !user ? (
-          <Auth onNavigate={setCurrentPage} />
-        ) : user.role === 'Company Administrator' ? (
+        {user.role === 'Company Administrator' ? (
           <AdminDashboard />
         ) : (
           <EmployeeDashboard />

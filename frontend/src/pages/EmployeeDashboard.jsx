@@ -17,32 +17,9 @@ import {
   verifyRechargePayment,
   getRideMessages,
   getBookingMessages,
+  payBooking,
 } from "../services/api";
-import {
-  Car,
-  Search,
-  PlusCircle,
-  Calendar,
-  Clock,
-  Users,
-  ShieldCheck,
-  Navigation,
-  History,
-  Plus,
-  AlertCircle,
-  CheckCircle2,
-  XCircle,
-  CheckCircle,
-  Wallet,
-  CreditCard,
-  ArrowUpCircle,
-  TrendingUp,
-  PlayCircle,
-  Zap,
-  ReceiptText,
-  Check,
-  CheckCheck,
-} from "lucide-react";
+
 import LocationAutocomplete from "../components/LocationAutocomplete";
 import MapDisplay from "../components/MapDisplay";
 import { supabase } from "../services/supabaseClient";
@@ -127,7 +104,8 @@ export default function EmployeeDashboard() {
   // Set up persistent socket connection on component mount
   useEffect(() => {
     if (!user) return;
-    const socketUrl = window.location.protocol + "//" + window.location.hostname + ":5000";
+    const socketUrl =
+      window.location.protocol + "//" + window.location.hostname + ":5000";
     const s = io(socketUrl);
     setSocket(s);
 
@@ -155,21 +133,30 @@ export default function EmployeeDashboard() {
     socket.emit("join_booking_chat", {
       bookingId: activeChat.booking_id,
       userId: user.id,
-      userName: user.fullName
+      userName: user.fullName,
     });
 
     // Check current online presence
-    socket.emit("check_user_presence", { targetUserId: activeChat.peer_id }, (res) => {
-      if (res && res.status) {
-        setPeerOnlineStatus(res.status);
-      }
-    });
+    socket.emit(
+      "check_user_presence",
+      { targetUserId: activeChat.peer_id },
+      (res) => {
+        if (res && res.status) {
+          setPeerOnlineStatus(res.status);
+        }
+      },
+    );
 
     const onUserPresence = ({ userId, status, lastActive }) => {
       if (activeChat && String(userId) === String(activeChat.peer_id)) {
         setPeerOnlineStatus(status);
         if (lastActive) {
-          setPeerLastSeen(new Date(lastActive).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+          setPeerLastSeen(
+            new Date(lastActive).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+          );
         }
       }
     };
@@ -178,7 +165,13 @@ export default function EmployeeDashboard() {
       if (Number(msg.bookingId) === Number(activeChat.booking_id)) {
         setChatMessages((prev) => {
           // Prevent duplicates
-          if (prev.some(m => m.id === msg.id || (msg.clientId && m.clientId === msg.clientId))) {
+          if (
+            prev.some(
+              (m) =>
+                m.id === msg.id ||
+                (msg.clientId && m.clientId === msg.clientId),
+            )
+          ) {
             return prev;
           }
           return [...prev, msg];
@@ -188,7 +181,7 @@ export default function EmployeeDashboard() {
         if (msg.senderId !== user.id) {
           socket.emit("read_booking_messages", {
             bookingId: activeChat.booking_id,
-            userId: user.id
+            userId: user.id,
           });
         }
       }
@@ -201,16 +194,21 @@ export default function EmployeeDashboard() {
     };
 
     const onMessagesReadReceipt = ({ bookingId, readBy }) => {
-      if (Number(bookingId) === Number(activeChat.booking_id) && readBy !== user.id) {
+      if (
+        Number(bookingId) === Number(activeChat.booking_id) &&
+        readBy !== user.id
+      ) {
         setChatMessages((prev) =>
-          prev.map((m) => (m.senderId === user.id ? { ...m, status: "Read" } : m))
+          prev.map((m) =>
+            m.senderId === user.id ? { ...m, status: "Read" } : m,
+          ),
         );
       }
     };
 
     const onMessageStatusUpdate = ({ messageId, status }) => {
       setChatMessages((prev) =>
-        prev.map((m) => (m.id === messageId ? { ...m, status } : m))
+        prev.map((m) => (m.id === messageId ? { ...m, status } : m)),
       );
     };
 
@@ -252,7 +250,7 @@ export default function EmployeeDashboard() {
         peer_role: "Passenger",
         ride_status: rideContext.status,
         pickup_location: riderOrRide.pickup_location,
-        destination: rideContext.destination
+        destination: rideContext.destination,
       };
     } else {
       // Passenger clicked Communicate on ride card
@@ -268,7 +266,7 @@ export default function EmployeeDashboard() {
         peer_role: "Driver",
         ride_status: riderOrRide.status,
         pickup_location: riderOrRide.pickup_location,
-        destination: riderOrRide.destination
+        destination: riderOrRide.destination,
       };
     }
 
@@ -279,27 +277,31 @@ export default function EmployeeDashboard() {
       socket.emit("join_booking_chat", {
         bookingId: context.booking_id,
         userId: user.id,
-        userName: user.fullName
+        userName: user.fullName,
       });
 
       // Check current online presence
-      socket.emit("check_user_presence", { targetUserId: context.peer_id }, (res) => {
-        if (res && res.status) {
-          setPeerOnlineStatus(res.status);
-        }
-      });
+      socket.emit(
+        "check_user_presence",
+        { targetUserId: context.peer_id },
+        (res) => {
+          if (res && res.status) {
+            setPeerOnlineStatus(res.status);
+          }
+        },
+      );
     }
 
     // Load message history
     try {
       const messages = await getBookingMessages(context.booking_id);
       setChatMessages(messages);
-      
+
       // Mark messages as read on load
       if (socket) {
         socket.emit("read_booking_messages", {
           bookingId: context.booking_id,
-          userId: user.id
+          userId: user.id,
         });
       }
     } catch (e) {
@@ -323,7 +325,7 @@ export default function EmployeeDashboard() {
       socket.emit("typing_status", {
         bookingId: activeChat.booking_id,
         isTyping: true,
-        userName: user.fullName
+        userName: user.fullName,
       });
     }
 
@@ -333,7 +335,7 @@ export default function EmployeeDashboard() {
       socket.emit("typing_status", {
         bookingId: activeChat.booking_id,
         isTyping: false,
-        userName: user.fullName
+        userName: user.fullName,
       });
     }, 2000);
   };
@@ -350,8 +352,11 @@ export default function EmployeeDashboard() {
       message: newMessage,
       senderId: user.id,
       senderName: "You",
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      status: "Sent"
+      timestamp: new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      status: "Sent",
     };
 
     setChatMessages((prev) => [...prev, tempMsg]);
@@ -361,7 +366,7 @@ export default function EmployeeDashboard() {
       message: newMessage,
       senderId: user.id,
       senderName: user.fullName,
-      clientId
+      clientId,
     });
 
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
@@ -369,7 +374,7 @@ export default function EmployeeDashboard() {
     socket.emit("typing_status", {
       bookingId: activeChat.booking_id,
       isTyping: false,
-      userName: user.fullName
+      userName: user.fullName,
     });
 
     setNewMessage("");
@@ -394,8 +399,6 @@ export default function EmployeeDashboard() {
   const [vehicleLiveCoords, setVehicleLiveCoords] = useState({}); // rideId -> { lat, lon, eta }
   const [simulating, setSimulating] = useState({}); // rideId -> boolean
   const simIntervalRef = useRef({});
-
-
 
   // State for Add Vehicle
   const [vehicles, setVehicles] = useState([]);
@@ -440,6 +443,26 @@ export default function EmployeeDashboard() {
   // UI state
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // Recurring Rides
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurringDays, setRecurringDays] = useState([]);
+  const [reqPickup, setReqPickup] = useState('');
+  const [reqDest, setReqDest] = useState('');
+  const [reqTime, setReqTime] = useState('');
+  const [reqSeats, setReqSeats] = useState(1);
+  const [recurringRequests, setRecurringRequests] = useState([]);
+
+
+  // Recurring Rides
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurringDays, setRecurringDays] = useState([]);
+  const [reqPickup, setReqPickup] = useState("");
+  const [reqDest, setReqDest] = useState("");
+  const [reqTime, setReqTime] = useState("");
+  const [reqSeats, setReqSeats] = useState(1);
+  const [recurringRequests, setRecurringRequests] = useState([]);
+
   const [success, setSuccess] = useState("");
 
   // Calculate detour distances for pending requests
@@ -521,7 +544,12 @@ export default function EmployeeDashboard() {
     loadRides();
     loadHistory();
     if (activeTab === "wallet") loadWalletData();
-    if (activeTab === "payment") { loadUnpaidBookings(); loadWalletData(); }
+    if (activeTab === "offer" || activeTab === "find") loadRecurringRequests();
+    if (activeTab === "offer" || activeTab === "find") loadRecurringRequests();
+    if (activeTab === "payment") {
+      loadUnpaidBookings();
+      loadWalletData();
+    }
   }, [activeTab]);
 
   // Load Razorpay SDK
@@ -568,6 +596,35 @@ export default function EmployeeDashboard() {
       setError("");
       setSuccess("");
     }, 4000);
+  };
+
+  const loadRecurringRequests = async () => {
+    try {
+      const res = await fetch("http://localhost:5000/api/rides/recurring", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setRecurringRequests(data);
+      }
+    } catch (error) {
+      console.error("Error fetching recurring requests:", error);
+    }
+  };
+
+  
+  const loadRecurringRequests = async () => {
+    try {
+      const res = await fetch('http://localhost:5000/api/rides/recurring', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setRecurringRequests(data);
+      }
+    } catch (error) {
+      console.error('Error fetching recurring requests:', error);
+    }
   };
 
   const loadVehicles = async () => {
@@ -618,7 +675,10 @@ export default function EmployeeDashboard() {
 
   const handleRechargeWallet = async (amount) => {
     const parsed = parseFloat(amount);
-    if (!parsed || parsed <= 0) { showMsg("Please enter a valid amount", true); return; }
+    if (!parsed || parsed <= 0) {
+      showMsg("Please enter a valid amount", true);
+      return;
+    }
     setWalletLoading(true);
     try {
       // 1. Create Razorpay order on backend
@@ -641,12 +701,15 @@ export default function EmployeeDashboard() {
               razorpayPaymentId: response.razorpay_payment_id,
               razorpayOrderId: response.razorpay_order_id,
               razorpaySignature: response.razorpay_signature,
-              isSimulation: orderData.isSimulation
+              isSimulation: orderData.isSimulation,
             };
 
-            const verificationResult = await verifyRechargePayment(verificationData);
+            const verificationResult =
+              await verifyRechargePayment(verificationData);
             setWalletBalance(parseFloat(verificationResult.balance));
-            showMsg(`✅ Wallet recharged successfully with $${parsed.toFixed(2)}!`);
+            showMsg(
+              ` Wallet recharged successfully with $${parsed.toFixed(2)}!`,
+            );
             setRechargeAmount("");
             loadWalletData();
           } catch (verifyErr) {
@@ -658,35 +721,37 @@ export default function EmployeeDashboard() {
         prefill: {
           name: user?.fullName || "",
           email: user?.email || "",
-          contact: user?.phone || ""
+          contact: user?.phone || "",
         },
         theme: {
-          color: "#71639e" // Odoo Violet theme style
+          color: "#71639e", // Odoo Violet theme style
         },
         modal: {
           ondismiss: function () {
             setWalletLoading(false);
-          }
-        }
+          },
+        },
       };
 
       // 3. Open Razorpay checkout
       if (orderData.isSimulation) {
         const proceedSim = window.confirm(
-          `Razorpay keys are not configured yet (Simulation Mode).\n\nRecharge Amount: $${parsed.toFixed(2)}\nOrder ID: ${orderData.orderId}\n\nWould you like to simulate a successful payment?`
+          `Razorpay keys are not configured yet (Simulation Mode).\n\nRecharge Amount: $${parsed.toFixed(2)}\nOrder ID: ${orderData.orderId}\n\nWould you like to simulate a successful payment?`,
         );
         if (proceedSim) {
           options.handler({
             razorpay_payment_id: `pay_sim_${Date.now()}`,
             razorpay_order_id: orderData.orderId,
-            razorpay_signature: "simulated_signature"
+            razorpay_signature: "simulated_signature",
           });
         } else {
           setWalletLoading(false);
         }
       } else {
         if (!window.Razorpay) {
-          throw new Error("Razorpay SDK failed to load. Please check your internet connection.");
+          throw new Error(
+            "Razorpay SDK failed to load. Please check your internet connection.",
+          );
         }
         const rzp = new window.Razorpay(options);
         rzp.open();
@@ -698,11 +763,17 @@ export default function EmployeeDashboard() {
   };
 
   const handlePayBooking = async () => {
-    if (!selectedPayBooking) { showMsg("Please select a booking to pay", true); return; }
+    if (!selectedPayBooking) {
+      showMsg("Please select a booking to pay", true);
+      return;
+    }
     setPaymentLoading(true);
     try {
-      const res = await payBooking(selectedPayBooking.booking_id, paymentMethod);
-      showMsg(`✅ ${res.message}`);
+      const res = await payBooking(
+        selectedPayBooking.booking_id,
+        paymentMethod,
+      );
+      showMsg(` ${res.message}`);
       setSelectedPayBooking(null);
       loadUnpaidBookings();
       if (paymentMethod === "Wallet") loadWalletData();
@@ -714,7 +785,10 @@ export default function EmployeeDashboard() {
   };
 
   const handleStartRide = async (rideId) => {
-    if (!window.confirm("Start this ride? Status will change to 'In Progress'.")) return;
+    if (
+      !window.confirm("Start this ride? Status will change to 'In Progress'.")
+    )
+      return;
     setLoading(true);
     try {
       await startRide(rideId);
@@ -730,35 +804,49 @@ export default function EmployeeDashboard() {
   // Driver: simulate moving along OSRM route and broadcast via socket
   const startDrivingSimulation = async (ride, socketInst) => {
     if (!ride.pickup_lat || !ride.destination_lat) {
-      showMsg("Cannot simulate: ride coordinates missing.", true); return;
+      showMsg("Cannot simulate: ride coordinates missing.", true);
+      return;
     }
     try {
       const res = await fetch(
-        `https://router.project-osrm.org/route/v1/driving/${ride.pickup_lon},${ride.pickup_lat};${ride.destination_lon},${ride.destination_lat}?overview=full&geometries=geojson`
+        `https://router.project-osrm.org/route/v1/driving/${ride.pickup_lon},${ride.pickup_lat};${ride.destination_lon},${ride.destination_lat}?overview=full&geometries=geojson`,
       );
       const data = await res.json();
-      if (!data.routes || !data.routes[0]) { showMsg("Could not fetch route for simulation.", true); return; }
+      if (!data.routes || !data.routes[0]) {
+        showMsg("Could not fetch route for simulation.", true);
+        return;
+      }
       const coords = data.routes[0].geometry.coordinates; // [[lon, lat], ...]
       const totalDuration = data.routes[0].duration; // seconds
       let stepIndex = 0;
       const step = Math.max(1, Math.floor(coords.length / 60)); // ~60 steps
 
-      setSimulating(prev => ({ ...prev, [ride.id]: true }));
+      setSimulating((prev) => ({ ...prev, [ride.id]: true }));
 
       const interval = setInterval(() => {
         if (stepIndex >= coords.length) {
           clearInterval(interval);
           delete simIntervalRef.current[ride.id];
-          setSimulating(prev => ({ ...prev, [ride.id]: false }));
+          setSimulating((prev) => ({ ...prev, [ride.id]: false }));
           return;
         }
         const [lon, lat] = coords[stepIndex];
-        const remaining = Math.round(totalDuration * (1 - stepIndex / coords.length));
+        const remaining = Math.round(
+          totalDuration * (1 - stepIndex / coords.length),
+        );
         const minutes = Math.floor(remaining / 60);
         const eta = `${minutes} min${minutes !== 1 ? "s" : ""}`;
-        setVehicleLiveCoords(prev => ({ ...prev, [ride.id]: { lat, lon, eta } }));
+        setVehicleLiveCoords((prev) => ({
+          ...prev,
+          [ride.id]: { lat, lon, eta },
+        }));
         if (socketInst) {
-          socketInst.emit("update_location", { rideId: ride.id, lat, lon, eta });
+          socketInst.emit("update_location", {
+            rideId: ride.id,
+            lat,
+            lon,
+            eta,
+          });
         }
         stepIndex += step;
       }, 1200);
@@ -775,11 +863,13 @@ export default function EmployeeDashboard() {
       clearInterval(simIntervalRef.current[rideId]);
       delete simIntervalRef.current[rideId];
     }
-    setSimulating(prev => ({ ...prev, [rideId]: false }));
-    setVehicleLiveCoords(prev => { const n = { ...prev }; delete n[rideId]; return n; });
+    setSimulating((prev) => ({ ...prev, [rideId]: false }));
+    setVehicleLiveCoords((prev) => {
+      const n = { ...prev };
+      delete n[rideId];
+      return n;
+    });
   };
-
-
 
   const handleAddVehicle = async (e) => {
     e.preventDefault();
@@ -793,6 +883,46 @@ export default function EmployeeDashboard() {
       showMsg(err.message, true);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAcceptRecurring = async (reqId) => {
+    try {
+      const res = await fetch(
+        `http://localhost:5000/api/rides/recurring/${reqId}/accept`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+      if (res.ok) {
+        alert("Recurring request accepted!");
+        loadRecurringRequests();
+      } else {
+        const err = await res.json();
+        alert(err.error || "Failed to accept request");
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  
+  const handleAcceptRecurring = async (reqId) => {
+    try {
+      const res = await fetch(`http://localhost:5000/api/rides/recurring/${reqId}/accept`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        alert('Recurring request accepted!');
+        loadRecurringRequests();
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Failed to accept request');
+      }
+    } catch (error) {
+      console.error(error);
     }
   };
 
@@ -1098,68 +1228,45 @@ export default function EmployeeDashboard() {
           className={`odoo-tab ${activeTab === "find" ? "active" : ""}`}
           onClick={() => setActiveTab("find")}
         >
-          <Search size={16} style={{ display: "inline", marginRight: "6px" }} />{" "}
-          Book a Ride
+          <></> Book a Ride
         </button>
         <button
           className={`odoo-tab ${activeTab === "current" ? "active" : ""}`}
           onClick={() => setActiveTab("current")}
         >
-          <Navigation
-            size={16}
-            style={{ display: "inline", marginRight: "6px" }}
-          />{" "}
-          Current Ride
+          <></> Current Ride
         </button>
         <button
           className={`odoo-tab ${activeTab === "offer" ? "active" : ""}`}
           onClick={() => setActiveTab("offer")}
         >
-          <Car size={16} style={{ display: "inline", marginRight: "6px" }} />{" "}
-          Offer a Ride
+          <></> Offer a Ride
         </button>
         <button
           className={`odoo-tab ${activeTab === "history" ? "active" : ""}`}
           onClick={() => setActiveTab("history")}
         >
-          <History
-            size={16}
-            style={{ display: "inline", marginRight: "6px" }}
-          />{" "}
-          Ride History
+          <></> Ride History
         </button>
         <button
           className={`odoo-tab ${activeTab === "vehicles" ? "active" : ""}`}
           onClick={() => setActiveTab("vehicles")}
         >
-          <PlusCircle
-            size={16}
-            style={{ display: "inline", marginRight: "6px" }}
-          />{" "}
-          My Vehicles
+          <></> My Vehicles
         </button>
         <button
           className={`odoo-tab ${activeTab === "wallet" ? "active" : ""}`}
           onClick={() => setActiveTab("wallet")}
         >
-          <Wallet
-            size={16}
-            style={{ display: "inline", marginRight: "6px" }}
-          />{" "}
-          Wallet
+          <></> Wallet
         </button>
         <button
           className={`odoo-tab ${activeTab === "payment" ? "active" : ""}`}
           onClick={() => setActiveTab("payment")}
         >
-          <CreditCard
-            size={16}
-            style={{ display: "inline", marginRight: "6px" }}
-          />{" "}
-          Payments
+          <></> Payments
         </button>
       </div>
-
 
       {error && (
         <div
@@ -1175,7 +1282,7 @@ export default function EmployeeDashboard() {
             zIndex: 9999,
           }}
         >
-          <AlertCircle size={18} /> {error}
+          <></> {error}
         </div>
       )}
       {success && (
@@ -1192,7 +1299,7 @@ export default function EmployeeDashboard() {
             zIndex: 9999,
           }}
         >
-          <CheckCircle2 size={18} /> {success}
+          <></> {success}
         </div>
       )}
 
@@ -1201,6 +1308,72 @@ export default function EmployeeDashboard() {
         {/* Book Ride Tab */}
         {activeTab === "find" && (
           <div>
+
+            <div>
+              <div style={{ background: '#fff', padding: '1.5rem', borderRadius: '8px', marginBottom: '2rem', border: '1px solid var(--border-color)' }}>
+                <h4 style={{ marginBottom: '1rem', color: 'var(--odoo-violet)' }}>Request a Recurring Ride</h4>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
+                  <label style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={isRecurring} onChange={(e) => setIsRecurring(e.target.checked)} style={{ transform: 'scale(1.2)' }} />
+                    Enable Recurring Request
+                  </label>
+                </div>
+                {isRecurring && (
+                  <form onSubmit={handleCreateRecurring} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                      <div style={{ flex: 1, minWidth: '200px' }}>
+                        <label className="form-label">Pickup Location</label>
+                        <input type="text" className="form-control" value={reqPickup} onChange={e=>setReqPickup(e.target.value)} required />
+                      </div>
+                      <div style={{ flex: 1, minWidth: '200px' }}>
+                        <label className="form-label">Destination</label>
+                        <input type="text" className="form-control" value={reqDest} onChange={e=>setReqDest(e.target.value)} required />
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                      <div style={{ flex: 1, minWidth: '200px' }}>
+                        <label className="form-label">Time</label>
+                        <input type="time" className="form-control" value={reqTime} onChange={e=>setReqTime(e.target.value)} required />
+                      </div>
+                      <div style={{ flex: 1, minWidth: '200px' }}>
+                        <label className="form-label">Seats Needed</label>
+                        <input type="number" min="1" className="form-control" value={reqSeats} onChange={e=>setReqSeats(parseInt(e.target.value))} required />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="form-label">Select Days</label>
+                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        {['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map(d => (
+                          <div 
+                            key={d}
+                            onClick={() => {
+                              const newDays = recurringDays.includes(d) ? recurringDays.filter(x => x !== d) : [...recurringDays, d];
+                              setRecurringDays(newDays);
+                            }}
+                            style={{ padding: '0.5rem 1rem', borderRadius: '4px', cursor: 'pointer', border: '1px solid ' + (recurringDays.includes(d) ? 'var(--odoo-teal)' : '#ccc'), background: recurringDays.includes(d) ? 'var(--odoo-teal)' : '#f8f9fa', color: recurringDays.includes(d) ? '#fff' : '#000', fontWeight: 600 }}
+                          >
+                            {d}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <button type="submit" className="odoo-btn" style={{ background: 'var(--odoo-teal)' }}>Send Recurring Request</button>
+                  </form>
+                )}
+                
+                {!isRecurring && recurringRequests.filter(r => r.passenger_id === user?.id).length > 0 && (
+                  <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border-color)' }}>
+                    <h5 style={{ marginBottom: '1rem' }}>My Sent Recurring Requests</h5>
+                    {recurringRequests.filter(r => r.passenger_id === user?.id).map(r => (
+                      <div key={r.id} style={{ background: '#f8f9fa', padding: '1rem', borderRadius: '6px', marginBottom: '0.5rem', borderLeft: '4px solid ' + (r.status === 'Accepted' ? 'green' : 'gray') }}>
+                        <strong>{r.pickup_location} {"->"} {r.destination}</strong> ({r.departure_time}) <br />
+                        Days: {r.days.join(', ')} | Status: {r.status}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
             <h3 style={{ marginBottom: "1.5rem", color: "var(--odoo-violet)" }}>
               Available Rides in {user?.organization?.name}
             </h3>
@@ -1257,61 +1430,39 @@ export default function EmployeeDashboard() {
                             }}
                           >
                             <span>
-                              <Calendar
-                                size={14}
-                                style={{
-                                  verticalAlign: "text-bottom",
-                                  marginRight: "4px",
-                                }}
-                              />{" "}
+                              <></>{" "}
                               {new Date(
                                 ride.departure_date,
                               ).toLocaleDateString()}
                             </span>
                             <span>
-                              <Clock
-                                size={14}
-                                style={{
-                                  verticalAlign: "text-bottom",
-                                  marginRight: "4px",
-                                }}
-                              />{" "}
-                              {ride.departure_time}
+                              <></> {ride.departure_time}
                             </span>
                             <span>
-                              <Car
-                                size={14}
-                                style={{
-                                  verticalAlign: "text-bottom",
-                                  marginRight: "4px",
-                                }}
-                              />{" "}
-                              {ride.vehicle_make}
+                              <></> {ride.vehicle_make}
                               {ride.vehicle_license_plate && (
-                                <span style={{ marginLeft: "6px", background: "#e9ecef", border: "1px solid #ced4da", borderRadius: "4px", padding: "1px 6px", fontSize: "0.78rem", fontWeight: 700, letterSpacing: "0.5px", color: "#495057" }}>
+                                <span
+                                  style={{
+                                    marginLeft: "6px",
+                                    background: "#e9ecef",
+                                    border: "1px solid #ced4da",
+                                    borderRadius: "4px",
+                                    padding: "1px 6px",
+                                    fontSize: "0.78rem",
+                                    fontWeight: 700,
+                                    letterSpacing: "0.5px",
+                                    color: "#495057",
+                                  }}
+                                >
                                   {ride.vehicle_license_plate}
                                 </span>
                               )}
                             </span>
                             <span>
-                              <Users
-                                size={14}
-                                style={{
-                                  verticalAlign: "text-bottom",
-                                  marginRight: "4px",
-                                }}
-                              />{" "}
-                              {ride.available_seats} seats left
+                              <></> {ride.available_seats} seats left
                             </span>
                             <span>
-                              <ShieldCheck
-                                size={14}
-                                style={{
-                                  verticalAlign: "text-bottom",
-                                  marginRight: "4px",
-                                }}
-                              />{" "}
-                              Driver: {ride.driver_name}
+                              <></> Driver: {ride.driver_name}
                             </span>
                           </div>
                         </div>
@@ -1430,7 +1581,7 @@ export default function EmployeeDashboard() {
                                 />
                                 {bookingParams.seats !== "" &&
                                   bookingParams.seats >
-                                  ride.available_seats && (
+                                    ride.available_seats && (
                                     <span
                                       style={{
                                         color: "#dc3545",
@@ -1524,7 +1675,7 @@ export default function EmployeeDashboard() {
                                     bookingParams.distanceKm === null ||
                                     bookingParams.seats === "" ||
                                     bookingParams.seats >
-                                    ride.available_seats ||
+                                      ride.available_seats ||
                                     bookingParams.seats < 1
                                   }
                                 >
@@ -1554,9 +1705,9 @@ export default function EmployeeDashboard() {
                                 requestCoords={
                                   bookingParams.pickupLat
                                     ? {
-                                      lat: bookingParams.pickupLat,
-                                      lon: bookingParams.pickupLon,
-                                    }
+                                        lat: bookingParams.pickupLat,
+                                        lon: bookingParams.pickupLon,
+                                      }
                                     : null
                                 }
                                 height="280px"
@@ -1581,7 +1732,7 @@ export default function EmployeeDashboard() {
             </h3>
 
             {activeDriverRides.length === 0 &&
-              activePassengerRides.length === 0 ? (
+            activePassengerRides.length === 0 ? (
               <div
                 style={{
                   textAlign: "center",
@@ -1590,11 +1741,7 @@ export default function EmployeeDashboard() {
                   borderRadius: "8px",
                 }}
               >
-                <Navigation
-                  size={48}
-                  color="var(--text-muted)"
-                  style={{ margin: "0 auto 1.5rem", opacity: 0.6 }}
-                />
+                <></>
                 <h4>No Active Rides Found</h4>
                 <p style={{ color: "var(--text-muted)", marginTop: "0.5rem" }}>
                   You don't have any pending requests or confirmed carpools at
@@ -1679,60 +1826,124 @@ export default function EmployeeDashboard() {
                           >
                             {ride.pickup_location} → {ride.destination}
                           </h4>
-                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "4px", fontSize: "0.88rem", color: "var(--text-muted)" }}>
-                            <Car size={14} />
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "0.5rem",
+                              marginTop: "4px",
+                              fontSize: "0.88rem",
+                              color: "var(--text-muted)",
+                            }}
+                          >
+                            <></>
                             <span>{ride.vehicle_make}</span>
                             {ride.vehicle_license_plate && (
-                              <span style={{ background: "#343a40", color: "white", borderRadius: "4px", padding: "1px 8px", fontSize: "0.78rem", fontWeight: 700, letterSpacing: "1px" }}>
+                              <span
+                                style={{
+                                  background: "#343a40",
+                                  color: "white",
+                                  borderRadius: "4px",
+                                  padding: "1px 8px",
+                                  fontSize: "0.78rem",
+                                  fontWeight: 700,
+                                  letterSpacing: "1px",
+                                }}
+                              >
                                 {ride.vehicle_license_plate}
                               </span>
                             )}
                           </div>
                         </div>
 
-                        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: "0.5rem",
+                            flexWrap: "wrap",
+                            alignItems: "center",
+                          }}
+                        >
                           {ride.status === "Open" && (
                             <button
                               className="btn btn-teal"
-                              style={{ fontSize: "0.85rem", padding: "0.5rem 1rem", display: "flex", alignItems: "center", gap: "0.4rem" }}
+                              style={{
+                                fontSize: "0.85rem",
+                                padding: "0.5rem 1rem",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.4rem",
+                              }}
                               onClick={() => handleStartRide(ride.id)}
                               disabled={loading}
                             >
-                              <PlayCircle size={15} /> Start Ride
+                              <></> Start Ride
                             </button>
                           )}
                           {ride.status === "In Progress" && (
-                            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                            <div
+                              style={{
+                                display: "flex",
+                                gap: "0.5rem",
+                                alignItems: "center",
+                              }}
+                            >
                               {simulating[ride.id] ? (
                                 <button
                                   className="btn btn-outline"
-                                  style={{ fontSize: "0.85rem", padding: "0.5rem 1rem", color: "#e67e22", borderColor: "#e67e22", display: "flex", alignItems: "center", gap: "0.4rem" }}
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    padding: "0.5rem 1rem",
+                                    color: "#e67e22",
+                                    borderColor: "#e67e22",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "0.4rem",
+                                  }}
                                   onClick={() => stopDrivingSimulation(ride.id)}
                                 >
-                                  <Zap size={15} /> Stop Sim
+                                  <></> Stop Sim
                                 </button>
                               ) : (
                                 <button
                                   className="btn btn-primary"
-                                  style={{ fontSize: "0.85rem", padding: "0.5rem 1rem", display: "flex", alignItems: "center", gap: "0.4rem" }}
-                                  onClick={() => startDrivingSimulation(ride, socket)}
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    padding: "0.5rem 1rem",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "0.4rem",
+                                  }}
+                                  onClick={() =>
+                                    startDrivingSimulation(ride, socket)
+                                  }
                                 >
-                                  <Zap size={15} /> Simulate Driving
+                                  <></> Simulate Driving
                                 </button>
                               )}
                             </div>
                           )}
                           <button
                             className="btn btn-outline"
-                            style={{ fontSize: "0.85rem", padding: "0.5rem 1rem" }}
-                            onClick={() => handleRideAction(ride.id, "Complete")}
+                            style={{
+                              fontSize: "0.85rem",
+                              padding: "0.5rem 1rem",
+                            }}
+                            onClick={() =>
+                              handleRideAction(ride.id, "Complete")
+                            }
                             disabled={loading}
                           >
                             Complete Ride
                           </button>
                           <button
                             className="btn btn-outline"
-                            style={{ fontSize: "0.85rem", padding: "0.5rem 1rem", color: "#dc3545", borderColor: "#dc3545" }}
+                            style={{
+                              fontSize: "0.85rem",
+                              padding: "0.5rem 1rem",
+                              color: "#dc3545",
+                              borderColor: "#dc3545",
+                            }}
                             onClick={() => handleRideAction(ride.id, "Delete")}
                             disabled={loading}
                           >
@@ -1740,7 +1951,6 @@ export default function EmployeeDashboard() {
                           </button>
                         </div>
                       </div>
-
 
                       <div
                         style={{
@@ -1803,11 +2013,31 @@ export default function EmployeeDashboard() {
                                         ({rider.passenger_phone})
                                       </span>
                                       {rider.payment_status === "Paid" ? (
-                                        <span style={{ marginLeft: "8px", padding: "1px 6px", borderRadius: "4px", background: "#d4edda", color: "#155724", fontSize: "0.75rem", fontWeight: 700 }}>
+                                        <span
+                                          style={{
+                                            marginLeft: "8px",
+                                            padding: "1px 6px",
+                                            borderRadius: "4px",
+                                            background: "#d4edda",
+                                            color: "#155724",
+                                            fontSize: "0.75rem",
+                                            fontWeight: 700,
+                                          }}
+                                        >
                                           Paid via {rider.payment_method}
                                         </span>
                                       ) : (
-                                        <span style={{ marginLeft: "8px", padding: "1px 6px", borderRadius: "4px", background: "#fff3cd", color: "#856404", fontSize: "0.75rem", fontWeight: 700 }}>
+                                        <span
+                                          style={{
+                                            marginLeft: "8px",
+                                            padding: "1px 6px",
+                                            borderRadius: "4px",
+                                            background: "#fff3cd",
+                                            color: "#856404",
+                                            fontSize: "0.75rem",
+                                            fontWeight: 700,
+                                          }}
+                                        >
                                           Unpaid
                                         </span>
                                       )}
@@ -1819,21 +2049,23 @@ export default function EmployeeDashboard() {
                                         }}
                                       >
                                         Pickup: {rider.pickup_location}
-                                       <div style={{ marginTop: "6px" }}>
-                                         <button
-                                           className="btn btn-teal"
-                                           style={{
-                                             fontSize: "0.75rem",
-                                             padding: "0.25rem 0.5rem",
-                                             display: "inline-flex",
-                                             alignItems: "center",
-                                             gap: "4px"
-                                           }}
-                                           onClick={() => handleOpenBookingChat(rider, ride)}
-                                         >
-                                           💬 Chat
-                                         </button>
-                                       </div>
+                                        <div style={{ marginTop: "6px" }}>
+                                          <button
+                                            className="btn btn-teal"
+                                            style={{
+                                              fontSize: "0.75rem",
+                                              padding: "0.25rem 0.5rem",
+                                              display: "inline-flex",
+                                              alignItems: "center",
+                                              gap: "4px",
+                                            }}
+                                            onClick={() =>
+                                              handleOpenBookingChat(rider, ride)
+                                            }
+                                          >
+                                            Chat
+                                          </button>
+                                        </div>
                                       </div>
                                     </div>
                                     <div style={{ textAlign: "right" }}>
@@ -2000,7 +2232,7 @@ export default function EmployeeDashboard() {
                                         }}
                                         disabled={loading}
                                       >
-                                        <CheckCircle size={14} /> Accept
+                                        <></> Accept
                                       </button>
                                       <button
                                         className="btn btn-outline"
@@ -2019,7 +2251,7 @@ export default function EmployeeDashboard() {
                                         }}
                                         disabled={loading}
                                       >
-                                        <XCircle size={14} /> Decline
+                                        <></> Decline
                                       </button>
                                     </div>
                                   </div>
@@ -2059,20 +2291,41 @@ export default function EmployeeDashboard() {
                             requestCoords={
                               activeRequest
                                 ? {
-                                  lat: parseFloat(activeRequest.pickup_lat),
-                                  lon: parseFloat(activeRequest.pickup_lon),
-                                  passenger_name: activeRequest.passenger_name,
-                                  pickup_location: activeRequest.pickup_location,
-                                }
+                                    lat: parseFloat(activeRequest.pickup_lat),
+                                    lon: parseFloat(activeRequest.pickup_lon),
+                                    passenger_name:
+                                      activeRequest.passenger_name,
+                                    pickup_location:
+                                      activeRequest.pickup_location,
+                                  }
                                 : null
                             }
                             vehicleCoords={vehicleLiveCoords[ride.id] || null}
                             height="350px"
                           />
                           {vehicleLiveCoords[ride.id] && (
-                            <div style={{ marginTop: "8px", padding: "0.6rem 1rem", background: "linear-gradient(135deg, #6c5ce7, #a29bfe)", borderRadius: "8px", color: "white", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                              <span style={{ fontSize: "0.85rem", fontWeight: 600 }}>🚗 Simulation Active</span>
-                              <span style={{ fontSize: "0.85rem" }}>ETA: <b>{vehicleLiveCoords[ride.id].eta}</b></span>
+                            <div
+                              style={{
+                                marginTop: "8px",
+                                padding: "0.6rem 1rem",
+                                background:
+                                  "linear-gradient(135deg, #6c5ce7, #a29bfe)",
+                                borderRadius: "8px",
+                                color: "white",
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                              }}
+                            >
+                              <span
+                                style={{ fontSize: "0.85rem", fontWeight: 600 }}
+                              >
+                                {" "}
+                                Simulation Active
+                              </span>
+                              <span style={{ fontSize: "0.85rem" }}>
+                                ETA: <b>{vehicleLiveCoords[ride.id].eta}</b>
+                              </span>
                             </div>
                           )}
 
@@ -2180,41 +2433,45 @@ export default function EmployeeDashboard() {
                           >
                             Cancel Request
                           </button>
-                           {(ride.booking_status === "Confirmed" && (ride.status === "Open" || ride.status === "In Progress")) && (
-                             <button
-                               className="btn btn-teal"
-                               style={{
-                                 fontSize: "0.85rem",
-                                 padding: "0.5rem 1rem",
-                                 marginLeft: "0.5rem"
-                               }}
-                               onClick={() => handleOpenBookingChat(ride)}
-                             >
-                               Communicate
-                             </button>
-                           )}
+                          {ride.booking_status === "Confirmed" &&
+                            (ride.status === "Open" ||
+                              ride.status === "In Progress") && (
+                              <button
+                                className="btn btn-teal"
+                                style={{
+                                  fontSize: "0.85rem",
+                                  padding: "0.5rem 1rem",
+                                  marginLeft: "0.5rem",
+                                }}
+                                onClick={() => handleOpenBookingChat(ride)}
+                              >
+                                Communicate
+                              </button>
+                            )}
                           {isConfirmed && ride.payment_status !== "Paid" && (
                             <button
                               className="btn btn-primary animate-pulse"
                               style={{
                                 fontSize: "0.85rem",
                                 padding: "0.5rem 1rem",
-                                background: "var(--odoo-violet)",
+                                background: "var(--odoo-teal)",
                                 border: "1px solid var(--odoo-violet)",
                                 display: "inline-flex",
                                 alignItems: "center",
                                 gap: "0.4rem",
-                                marginLeft: "8px"
+                                marginLeft: "8px",
                               }}
-                              onClick={() => setSelectedPayBooking({
-                                booking_id: ride.booking_id,
-                                pickup_location: ride.pickup_location,
-                                destination: ride.destination,
-                                driver_name: ride.driver_name,
-                                fare: ride.my_fare
-                              })}
+                              onClick={() =>
+                                setSelectedPayBooking({
+                                  booking_id: ride.booking_id,
+                                  pickup_location: ride.pickup_location,
+                                  destination: ride.destination,
+                                  driver_name: ride.driver_name,
+                                  fare: ride.my_fare,
+                                })
+                              }
                             >
-                              <CreditCard size={14} /> Pay (${Number(ride.my_fare).toFixed(2)})
+                              <></> Pay (${Number(ride.my_fare).toFixed(2)})
                             </button>
                           )}
                           {isConfirmed && ride.payment_status === "Paid" && (
@@ -2227,10 +2484,10 @@ export default function EmployeeDashboard() {
                                 alignItems: "center",
                                 gap: "0.25rem",
                                 padding: "0.5rem",
-                                marginLeft: "8px"
+                                marginLeft: "8px",
                               }}
                             >
-                              ✅ Paid via {ride.payment_method}
+                              Paid via {ride.payment_method}
                             </span>
                           )}
                         </div>
@@ -2270,7 +2527,19 @@ export default function EmployeeDashboard() {
                             <div>
                               <b>Vehicle:</b> {ride.vehicle_make}
                               {ride.vehicle_license_plate && (
-                                <span style={{ marginLeft: "8px", background: "#e9ecef", border: "1px solid #ced4da", borderRadius: "4px", padding: "2px 8px", fontSize: "0.82rem", fontWeight: 700, letterSpacing: "0.5px", color: "#343a40" }}>
+                                <span
+                                  style={{
+                                    marginLeft: "8px",
+                                    background: "#e9ecef",
+                                    border: "1px solid #ced4da",
+                                    borderRadius: "4px",
+                                    padding: "2px 8px",
+                                    fontSize: "0.82rem",
+                                    fontWeight: 700,
+                                    letterSpacing: "0.5px",
+                                    color: "#343a40",
+                                  }}
+                                >
                                   {ride.vehicle_license_plate}
                                 </span>
                               )}
@@ -2339,7 +2608,7 @@ export default function EmployeeDashboard() {
                                 Other Confirmed Passenger(s) sharing this ride:
                               </h6>
                               {ride.other_riders &&
-                                ride.other_riders.length > 0 ? (
+                              ride.other_riders.length > 0 ? (
                                 <ul
                                   style={{
                                     listStyleType: "disc",
@@ -2394,37 +2663,56 @@ export default function EmployeeDashboard() {
                               })),
                               isConfirmed
                                 ? {
-                                  lat: parseFloat(ride.my_pickup_lat),
-                                  lon: parseFloat(ride.my_pickup_lon),
-                                  passenger_name: "You",
-                                  pickup_location: ride.my_pickup_location,
-                                }
+                                    lat: parseFloat(ride.my_pickup_lat),
+                                    lon: parseFloat(ride.my_pickup_lon),
+                                    passenger_name: "You",
+                                    pickup_location: ride.my_pickup_location,
+                                  }
                                 : null,
                             ].filter((p) => p && p.lat && p.lon)}
                             requestCoords={
                               !isConfirmed
                                 ? {
-                                  lat: parseFloat(ride.my_pickup_lat),
-                                  lon: parseFloat(ride.my_pickup_lon),
-                                  passenger_name: "You (Pending Request)",
-                                  pickup_location: ride.my_pickup_location,
-                                }
+                                    lat: parseFloat(ride.my_pickup_lat),
+                                    lon: parseFloat(ride.my_pickup_lon),
+                                    passenger_name: "You (Pending Request)",
+                                    pickup_location: ride.my_pickup_location,
+                                  }
                                 : null
                             }
                             vehicleCoords={vehicleLiveCoords[ride.id] || null}
                             height="300px"
                           />
                           {ride.status === "In Progress" && (
-                            <div style={{ marginTop: "8px", padding: "0.65rem 1rem", borderRadius: "8px", display: "flex", justifyContent: "space-between", alignItems: "center", background: vehicleLiveCoords[ride.id] ? "linear-gradient(135deg, #6c5ce7, #a29bfe)" : "#f1f3f5", color: vehicleLiveCoords[ride.id] ? "white" : "var(--text-muted)", fontSize: "0.85rem" }}>
+                            <div
+                              style={{
+                                marginTop: "8px",
+                                padding: "0.65rem 1rem",
+                                borderRadius: "8px",
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                background: vehicleLiveCoords[ride.id]
+                                  ? "linear-gradient(135deg, #6c5ce7, #a29bfe)"
+                                  : "#f1f3f5",
+                                color: vehicleLiveCoords[ride.id]
+                                  ? "white"
+                                  : "var(--text-muted)",
+                                fontSize: "0.85rem",
+                              }}
+                            >
                               <span style={{ fontWeight: 600 }}>
-                                {vehicleLiveCoords[ride.id] ? "🚗 Driver is on the way" : "⏳ Waiting for driver to start simulation..."}
+                                {vehicleLiveCoords[ride.id]
+                                  ? " Driver is on the way"
+                                  : "⏳ Waiting for driver to start simulation..."}
                               </span>
                               {vehicleLiveCoords[ride.id] && (
-                                <span>ETA: <b>{vehicleLiveCoords[ride.id].eta}</b></span>
+                                <span>
+                                  ETA: <b>{vehicleLiveCoords[ride.id].eta}</b>
+                                </span>
                               )}
                             </div>
                           )}
-
                         </div>
                       </div>
                     </div>
@@ -2438,6 +2726,32 @@ export default function EmployeeDashboard() {
         {/* Offer Ride Tab */}
         {activeTab === "offer" && (
           <div>
+
+            <div>
+              {recurringRequests.filter(r => r.passenger_id !== user?.id && (r.status === 'Open' || (r.status === 'Accepted' && r.accepted_driver_id === user?.id))).length > 0 && (
+                <div style={{ background: 'var(--odoo-teal)', color: 'white', padding: '1.5rem', borderRadius: '8px', marginBottom: '2rem', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+                  <h4 style={{ marginBottom: '1rem' }}>Recurring Requests from Colleagues</h4>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    {recurringRequests.filter(r => r.passenger_id !== user?.id && (r.status === 'Open' || (r.status === 'Accepted' && r.accepted_driver_id === user?.id))).map(r => (
+                      <div key={r.id} style={{ background: 'white', color: 'black', padding: '1rem', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <div>
+                          <strong style={{ fontSize: '1.1rem', color: 'var(--odoo-violet)' }}>{r.passenger_name}</strong> needs a ride:<br/>
+                          <b>{r.pickup_location}</b> to <b>{r.destination}</b><br/>
+                          Time: <b>{r.departure_time}</b> | Days: <b>{r.days.join(', ')}</b> | Seats: <b>{r.seats_needed}</b>
+                        </div>
+                        <div>
+                          {r.status === 'Open' ? (
+                            <button onClick={() => handleAcceptRecurring(r.id)} className="odoo-btn" style={{ padding: '0.5rem 1rem' }}>ACCEPT REQUEST</button>
+                          ) : (
+                            <span style={{ fontWeight: 'bold', color: 'green', padding: '0.5rem 1rem', border: '2px solid green', borderRadius: '4px' }}>ACCEPTED BY YOU</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
             <h3 style={{ marginBottom: "1.5rem", color: "var(--odoo-teal)" }}>
               Publish a New Ride
             </h3>
@@ -2450,11 +2764,7 @@ export default function EmployeeDashboard() {
                   borderRadius: "8px",
                 }}
               >
-                <Car
-                  size={32}
-                  color="var(--text-muted)"
-                  style={{ margin: "0 auto 1rem" }}
-                />
+                <></>
                 <p>You need to add a vehicle before you can offer a ride.</p>
                 <button
                   className="btn btn-primary"
@@ -2520,7 +2830,8 @@ export default function EmployeeDashboard() {
                               departureDate: e.target.value,
                               // reset time if date changed to today so stale past time can't persist
                               departureTime:
-                                e.target.value === new Date().toISOString().split("T")[0]
+                                e.target.value ===
+                                new Date().toISOString().split("T")[0]
                                   ? ""
                                   : offerForm.departureTime,
                             })
@@ -2534,7 +2845,8 @@ export default function EmployeeDashboard() {
                           className="form-control"
                           required
                           min={
-                            offerForm.departureDate === new Date().toISOString().split("T")[0]
+                            offerForm.departureDate ===
+                            new Date().toISOString().split("T")[0]
                               ? new Date().toTimeString().slice(0, 5)
                               : undefined
                           }
@@ -2632,17 +2944,17 @@ export default function EmployeeDashboard() {
                       startCoords={
                         offerForm.pickupLat
                           ? {
-                            lat: offerForm.pickupLat,
-                            lon: offerForm.pickupLon,
-                          }
+                              lat: offerForm.pickupLat,
+                              lon: offerForm.pickupLon,
+                            }
                           : null
                       }
                       endCoords={
                         offerForm.destinationLat
                           ? {
-                            lat: offerForm.destinationLat,
-                            lon: offerForm.destinationLon,
-                          }
+                              lat: offerForm.destinationLat,
+                              lon: offerForm.destinationLon,
+                            }
                           : null
                       }
                       height="380px"
@@ -2713,12 +3025,12 @@ export default function EmployeeDashboard() {
                             style={{
                               background:
                                 ride.booking_status === "Declined" ||
-                                  ride.booking_status === "Cancelled"
+                                ride.booking_status === "Cancelled"
                                   ? "#f8d7da"
                                   : "",
                               color:
                                 ride.booking_status === "Declined" ||
-                                  ride.booking_status === "Cancelled"
+                                ride.booking_status === "Cancelled"
                                   ? "#721c24"
                                   : "",
                             }}
@@ -2728,19 +3040,31 @@ export default function EmployeeDashboard() {
                               `(Reason: ${ride.cancellation_reason})`}
                           </span>
                         )}
-                        {ride.user_role === "Passenger" && ride.booking_status === "Confirmed" && (
-                          <span
-                            className="odoo-badge"
-                            style={{
-                              background: ride.payment_status === "Paid" ? "#d4edda" : "#fff3cd",
-                              color: ride.payment_status === "Paid" ? "#155724" : "#856404",
-                              borderColor: ride.payment_status === "Paid" ? "#c3e6cb" : "#ffeeba",
-                              marginLeft: "8px"
-                            }}
-                          >
-                            {ride.payment_status === "Paid" ? `Paid via ${ride.payment_method}` : "Unpaid"}
-                          </span>
-                        )}
+                        {ride.user_role === "Passenger" &&
+                          ride.booking_status === "Confirmed" && (
+                            <span
+                              className="odoo-badge"
+                              style={{
+                                background:
+                                  ride.payment_status === "Paid"
+                                    ? "#d4edda"
+                                    : "#fff3cd",
+                                color:
+                                  ride.payment_status === "Paid"
+                                    ? "#155724"
+                                    : "#856404",
+                                borderColor:
+                                  ride.payment_status === "Paid"
+                                    ? "#c3e6cb"
+                                    : "#ffeeba",
+                                marginLeft: "8px",
+                              }}
+                            >
+                              {ride.payment_status === "Paid"
+                                ? `Paid via ${ride.payment_method}`
+                                : "Unpaid"}
+                            </span>
+                          )}
                       </div>
                       <div
                         style={{
@@ -2751,8 +3075,8 @@ export default function EmployeeDashboard() {
                         {new Date(ride.departure_date).toLocaleDateString()} at{" "}
                         {ride.departure_time} |
                         {ride.user_role === "Passenger"
-                          ? ` Driver: ${ride.driver_name} | 🚗 ${ride.vehicle_make}${ride.vehicle_license_plate ? ` [${ride.vehicle_license_plate}]` : ""}`
-                          : ` 🚗 ${ride.vehicle_make}${ride.vehicle_license_plate ? ` [${ride.vehicle_license_plate}]` : ""}`}
+                          ? ` Driver: ${ride.driver_name} |  ${ride.vehicle_make}${ride.vehicle_license_plate ? ` [${ride.vehicle_license_plate}]` : ""}`
+                          : `  ${ride.vehicle_make}${ride.vehicle_license_plate ? ` [${ride.vehicle_license_plate}]` : ""}`}
                       </div>
                     </div>
                     <div style={{ display: "flex", gap: "0.5rem" }}>
@@ -2777,8 +3101,8 @@ export default function EmployeeDashboard() {
                               gap: "6px",
                               fontSize: "0.85rem",
                               padding: "0.5rem 1rem",
-                              background: "var(--odoo-violet)",
-                              border: "1px solid var(--odoo-violet)"
+                              background: "var(--odoo-teal)",
+                              border: "1px solid var(--odoo-violet)",
                             }}
                             onClick={(e) => {
                               e.stopPropagation();
@@ -2787,17 +3111,17 @@ export default function EmployeeDashboard() {
                                 pickup_location: ride.pickup_location,
                                 destination: ride.destination,
                                 driver_name: ride.driver_name,
-                                fare: ride.my_fare
+                                fare: ride.my_fare,
                               });
                             }}
                           >
-                            <CreditCard size={14} /> Pay (${Number(ride.my_fare).toFixed(2)})
+                            <></> Pay (${Number(ride.my_fare).toFixed(2)})
                           </button>
                         )}
-                      {(ride.user_role === "Passenger" &&
+                      {ride.user_role === "Passenger" &&
                         ride.booking_status === "Confirmed" &&
                         (ride.status === "Open" ||
-                          ride.status === "In Progress")) && (
+                          ride.status === "In Progress") && (
                           <button
                             className="btn btn-teal"
                             style={{
@@ -2845,62 +3169,151 @@ export default function EmployeeDashboard() {
                     borderRadius: "12px",
                   }}
                 >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
-                    <h4 style={{ margin: 0, color: "var(--odoo-violet)" }}>Ride Details</h4>
-                    <button className="btn btn-outline" style={{ padding: "0.2rem 0.5rem" }} onClick={() => setSelectedHistoryRide(null)}>X</button>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: "1.5rem",
+                    }}
+                  >
+                    <h4 style={{ margin: 0, color: "var(--odoo-violet)" }}>
+                      Ride Details
+                    </h4>
+                    <button
+                      className="btn btn-outline"
+                      style={{ padding: "0.2rem 0.5rem" }}
+                      onClick={() => setSelectedHistoryRide(null)}
+                    >
+                      X
+                    </button>
                   </div>
 
-                  <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", fontSize: "0.95rem" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "0.75rem",
+                      fontSize: "0.95rem",
+                    }}
+                  >
                     {selectedHistoryRide.user_role === "Passenger" && (
-                      <div><b>Driver Name:</b> {selectedHistoryRide.driver_name}</div>
+                      <div>
+                        <b>Driver Name:</b> {selectedHistoryRide.driver_name}
+                      </div>
                     )}
-                    <div><b>Vehicle:</b> {selectedHistoryRide.vehicle_make} {selectedHistoryRide.vehicle_license_plate ? `[${selectedHistoryRide.vehicle_license_plate}]` : ""}</div>
-                    <div><b>Pickup Point:</b> {selectedHistoryRide.my_pickup_location || selectedHistoryRide.pickup_location}</div>
-                    <div><b>Destination Point:</b> {selectedHistoryRide.destination}</div>
-                    {selectedHistoryRide.user_role === "Passenger" && selectedHistoryRide.my_distance_km && (
-                      <div><b>Distance:</b> {selectedHistoryRide.my_distance_km} km</div>
-                    )}
-                    <div><b>Date & Time:</b> {new Date(selectedHistoryRide.departure_date).toLocaleDateString()} at {selectedHistoryRide.departure_time}</div>
-                    <div><b>Per Seat Charge:</b> ${Number(selectedHistoryRide.fare_per_seat).toFixed(2)}</div>
+                    <div>
+                      <b>Vehicle:</b> {selectedHistoryRide.vehicle_make}{" "}
+                      {selectedHistoryRide.vehicle_license_plate
+                        ? `[${selectedHistoryRide.vehicle_license_plate}]`
+                        : ""}
+                    </div>
+                    <div>
+                      <b>Pickup Point:</b>{" "}
+                      {selectedHistoryRide.my_pickup_location ||
+                        selectedHistoryRide.pickup_location}
+                    </div>
+                    <div>
+                      <b>Destination Point:</b>{" "}
+                      {selectedHistoryRide.destination}
+                    </div>
+                    {selectedHistoryRide.user_role === "Passenger" &&
+                      selectedHistoryRide.my_distance_km && (
+                        <div>
+                          <b>Distance:</b> {selectedHistoryRide.my_distance_km}{" "}
+                          km
+                        </div>
+                      )}
+                    <div>
+                      <b>Date & Time:</b>{" "}
+                      {new Date(
+                        selectedHistoryRide.departure_date,
+                      ).toLocaleDateString()}{" "}
+                      at {selectedHistoryRide.departure_time}
+                    </div>
+                    <div>
+                      <b>Per Seat Charge:</b> $
+                      {Number(selectedHistoryRide.fare_per_seat).toFixed(2)}
+                    </div>
 
-                    <div style={{ marginTop: "0.5rem", paddingTop: "0.5rem", borderTop: "1px solid var(--border-color)" }}>
+                    <div
+                      style={{
+                        marginTop: "0.5rem",
+                        paddingTop: "0.5rem",
+                        borderTop: "1px solid var(--border-color)",
+                      }}
+                    >
                       <b>Total Charge:</b>
-                      <span style={{ marginLeft: "0.5rem", color: "var(--odoo-teal)", fontWeight: 800, fontSize: "1.1rem" }}>
-                        ${selectedHistoryRide.user_role === "Passenger"
+                      <span
+                        style={{
+                          marginLeft: "0.5rem",
+                          color: "var(--odoo-teal)",
+                          fontWeight: 800,
+                          fontSize: "1.1rem",
+                        }}
+                      >
+                        $
+                        {selectedHistoryRide.user_role === "Passenger"
                           ? Number(selectedHistoryRide.my_fare).toFixed(2)
-                          : (Number(selectedHistoryRide.fare_per_seat) * (selectedHistoryRide.bookings ? selectedHistoryRide.bookings.reduce((sum, b) => sum + b.seats_booked, 0) : 0)).toFixed(2)}
+                          : (
+                              Number(selectedHistoryRide.fare_per_seat) *
+                              (selectedHistoryRide.bookings
+                                ? selectedHistoryRide.bookings.reduce(
+                                    (sum, b) => sum + b.seats_booked,
+                                    0,
+                                  )
+                                : 0)
+                            ).toFixed(2)}
                       </span>
                     </div>
 
-                    {selectedHistoryRide.user_role === "Passenger" && selectedHistoryRide.payment_status && (
-                      <div style={{ marginTop: "0.5rem" }}>
-                        <b>Payment Status:</b>
-                        <span style={{
-                          marginLeft: "0.5rem",
-                          padding: "2px 8px",
-                          borderRadius: "4px",
-                          background: selectedHistoryRide.payment_status === "Paid" ? "#d4edda" : "#f8d7da",
-                          color: selectedHistoryRide.payment_status === "Paid" ? "#155724" : "#721c24",
-                          fontWeight: "bold"
-                        }}>
-                          {selectedHistoryRide.payment_status}
-                        </span>
-                      </div>
-                    )}
+                    {selectedHistoryRide.user_role === "Passenger" &&
+                      selectedHistoryRide.payment_status && (
+                        <div style={{ marginTop: "0.5rem" }}>
+                          <b>Payment Status:</b>
+                          <span
+                            style={{
+                              marginLeft: "0.5rem",
+                              padding: "2px 8px",
+                              borderRadius: "4px",
+                              background:
+                                selectedHistoryRide.payment_status === "Paid"
+                                  ? "#d4edda"
+                                  : "#f8d7da",
+                              color:
+                                selectedHistoryRide.payment_status === "Paid"
+                                  ? "#155724"
+                                  : "#721c24",
+                              fontWeight: "bold",
+                            }}
+                          >
+                            {selectedHistoryRide.payment_status}
+                          </span>
+                        </div>
+                      )}
 
                     {selectedHistoryRide.user_role === "Passenger" &&
                       selectedHistoryRide.payment_status === "Unpaid" &&
-                      (selectedHistoryRide.status === "Completed" || selectedHistoryRide.status === "In Progress" || selectedHistoryRide.booking_status === "Confirmed") && (
+                      (selectedHistoryRide.status === "Completed" ||
+                        selectedHistoryRide.status === "In Progress" ||
+                        selectedHistoryRide.booking_status === "Confirmed") && (
                         <button
                           className="btn btn-primary"
-                          style={{ marginTop: "1rem", padding: "0.75rem", width: "100%", fontWeight: "bold" }}
+                          style={{
+                            marginTop: "1rem",
+                            padding: "0.75rem",
+                            width: "100%",
+                            fontWeight: "bold",
+                          }}
                           onClick={() => {
                             setSelectedPayBooking({
                               booking_id: selectedHistoryRide.booking_id,
-                              pickup_location: selectedHistoryRide.my_pickup_location || selectedHistoryRide.pickup_location,
+                              pickup_location:
+                                selectedHistoryRide.my_pickup_location ||
+                                selectedHistoryRide.pickup_location,
                               destination: selectedHistoryRide.destination,
                               driver_name: selectedHistoryRide.driver_name,
-                              fare: selectedHistoryRide.my_fare
+                              fare: selectedHistoryRide.my_fare,
                             });
                             setSelectedHistoryRide(null);
                           }}
@@ -2985,7 +3398,7 @@ export default function EmployeeDashboard() {
                     className="btn btn-primary"
                     disabled={loading}
                   >
-                    <Plus size={16} /> Register Vehicle
+                    <></> Register Vehicle
                   </button>
                 </form>
               </div>
@@ -3020,8 +3433,7 @@ export default function EmployeeDashboard() {
                             fontWeight: 600,
                           }}
                         >
-                          <Car size={18} color="var(--odoo-violet)" />{" "}
-                          {v.make_model}
+                          <></> {v.make_model}
                         </div>
                         <div
                           style={{
@@ -3045,29 +3457,128 @@ export default function EmployeeDashboard() {
         {/* ========== WALLET TAB ========== */}
         {activeTab === "wallet" && (
           <div>
-            <h3 style={{ marginBottom: "1.5rem", color: "var(--odoo-violet)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              <Wallet size={24} /> My Wallet
+            <h3
+              style={{
+                marginBottom: "1.5rem",
+                color: "var(--odoo-violet)",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+              }}
+            >
+              <></> My Wallet
             </h3>
 
             <div style={{ display: "flex", gap: "2rem", flexWrap: "wrap" }}>
               {/* Balance Card */}
               <div style={{ flex: "1 1 300px" }}>
-                <div style={{ background: "linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%)", borderRadius: "16px", padding: "2rem", color: "white", marginBottom: "1.5rem", boxShadow: "0 8px 32px rgba(108,92,231,0.35)", position: "relative", overflow: "hidden" }}>
-                  <div style={{ position: "absolute", top: "-30px", right: "-30px", width: "120px", height: "120px", borderRadius: "50%", background: "rgba(255,255,255,0.1)" }} />
-                  <div style={{ position: "absolute", bottom: "-20px", left: "60px", width: "80px", height: "80px", borderRadius: "50%", background: "rgba(255,255,255,0.07)" }} />
-                  <div style={{ fontSize: "0.85rem", opacity: 0.85, marginBottom: "0.5rem", fontWeight: 500 }}>Available Balance</div>
-                  <div style={{ fontSize: "2.8rem", fontWeight: 800, letterSpacing: "-1px" }}>${walletBalance.toFixed(2)}</div>
-                  <div style={{ marginTop: "1rem", fontSize: "0.8rem", opacity: 0.7 }}>EcoDrive Wallet • {user?.fullName}</div>
+                <div
+                  style={{
+                    background:
+                      "linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%)",
+                    borderRadius: "16px",
+                    padding: "2rem",
+                    color: "white",
+                    marginBottom: "1.5rem",
+                    boxShadow: "0 8px 32px rgba(108,92,231,0.35)",
+                    position: "relative",
+                    overflow: "hidden",
+                  }}
+                >
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "-30px",
+                      right: "-30px",
+                      width: "120px",
+                      height: "120px",
+                      borderRadius: "50%",
+                      background: "rgba(255,255,255,0.1)",
+                    }}
+                  />
+                  <div
+                    style={{
+                      position: "absolute",
+                      bottom: "-20px",
+                      left: "60px",
+                      width: "80px",
+                      height: "80px",
+                      borderRadius: "50%",
+                      background: "rgba(255,255,255,0.07)",
+                    }}
+                  />
+                  <div
+                    style={{
+                      fontSize: "0.85rem",
+                      opacity: 0.85,
+                      marginBottom: "0.5rem",
+                      fontWeight: 500,
+                    }}
+                  >
+                    Available Balance
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "2.8rem",
+                      fontWeight: 800,
+                      letterSpacing: "-1px",
+                    }}
+                  >
+                    ${walletBalance.toFixed(2)}
+                  </div>
+                  <div
+                    style={{
+                      marginTop: "1rem",
+                      fontSize: "0.8rem",
+                      opacity: 0.7,
+                    }}
+                  >
+                    EcoDrive Wallet • {user?.fullName}
+                  </div>
                 </div>
 
                 {/* Quick Recharge */}
-                <div style={{ background: "white", border: "1px solid var(--border-color)", borderRadius: "12px", padding: "1.5rem" }}>
-                  <h5 style={{ marginBottom: "1rem", fontWeight: 700, color: "var(--odoo-violet)", display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                    <ArrowUpCircle size={18} /> Recharge Wallet
+                <div
+                  style={{
+                    background: "white",
+                    border: "1px solid var(--border-color)",
+                    borderRadius: "12px",
+                    padding: "1.5rem",
+                  }}
+                >
+                  <h5
+                    style={{
+                      marginBottom: "1rem",
+                      fontWeight: 700,
+                      color: "var(--odoo-violet)",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.4rem",
+                    }}
+                  >
+                    <></> Recharge Wallet
                   </h5>
-                  <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "1rem" }}>
-                    {[10, 25, 50, 100].map(amt => (
-                      <button key={amt} className="btn btn-outline" style={{ flex: "1 1 60px", padding: "0.5rem", fontWeight: 700, fontSize: "0.95rem" }} onClick={() => handleRechargeWallet(amt)} disabled={walletLoading}>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "0.5rem",
+                      flexWrap: "wrap",
+                      marginBottom: "1rem",
+                    }}
+                  >
+                    {[10, 25, 50, 100].map((amt) => (
+                      <button
+                        key={amt}
+                        className="btn btn-outline"
+                        style={{
+                          flex: "1 1 60px",
+                          padding: "0.5rem",
+                          fontWeight: 700,
+                          fontSize: "0.95rem",
+                        }}
+                        onClick={() => handleRechargeWallet(amt)}
+                        disabled={walletLoading}
+                      >
                         ${amt}
                       </button>
                     ))}
@@ -3080,11 +3591,23 @@ export default function EmployeeDashboard() {
                       min="1"
                       step="0.01"
                       value={rechargeAmount}
-                      onChange={e => setRechargeAmount(e.target.value)}
+                      onChange={(e) => setRechargeAmount(e.target.value)}
                       style={{ flex: 1, borderRadius: "8px" }}
                     />
-                    <button className="btn btn-primary" style={{ whiteSpace: "nowrap", padding: "0.5rem 1.25rem", borderRadius: "8px", display: "flex", alignItems: "center", gap: "0.4rem" }} onClick={() => handleRechargeWallet(rechargeAmount)} disabled={walletLoading || !rechargeAmount}>
-                      <ArrowUpCircle size={15} /> {walletLoading ? "..." : "Recharge"}
+                    <button
+                      className="btn btn-primary"
+                      style={{
+                        whiteSpace: "nowrap",
+                        padding: "0.5rem 1.25rem",
+                        borderRadius: "8px",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.4rem",
+                      }}
+                      onClick={() => handleRechargeWallet(rechargeAmount)}
+                      disabled={walletLoading || !rechargeAmount}
+                    >
+                      <></> {walletLoading ? "..." : "Recharge"}
                     </button>
                   </div>
                 </div>
@@ -3092,27 +3615,105 @@ export default function EmployeeDashboard() {
 
               {/* Transaction History */}
               <div style={{ flex: "2 1 400px" }}>
-                <div style={{ background: "white", border: "1px solid var(--border-color)", borderRadius: "12px", padding: "1.5rem" }}>
-                  <h5 style={{ marginBottom: "1rem", fontWeight: 700, color: "var(--odoo-teal)", display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                    <TrendingUp size={18} /> Transaction History
+                <div
+                  style={{
+                    background: "white",
+                    border: "1px solid var(--border-color)",
+                    borderRadius: "12px",
+                    padding: "1.5rem",
+                  }}
+                >
+                  <h5
+                    style={{
+                      marginBottom: "1rem",
+                      fontWeight: 700,
+                      color: "var(--odoo-teal)",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.4rem",
+                    }}
+                  >
+                    <></> Transaction History
                   </h5>
                   {walletTransactions.length === 0 ? (
-                    <p style={{ color: "var(--text-muted)", fontStyle: "italic", textAlign: "center", padding: "2rem" }}>No transactions yet. Recharge your wallet to get started!</p>
+                    <p
+                      style={{
+                        color: "var(--text-muted)",
+                        fontStyle: "italic",
+                        textAlign: "center",
+                        padding: "2rem",
+                      }}
+                    >
+                      No transactions yet. Recharge your wallet to get started!
+                    </p>
                   ) : (
-                    <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxHeight: "400px", overflowY: "auto" }}>
-                      {walletTransactions.map(tx => {
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "0.5rem",
+                        maxHeight: "400px",
+                        overflowY: "auto",
+                      }}
+                    >
+                      {walletTransactions.map((tx) => {
                         const isPositive = tx.amount > 0;
                         return (
-                          <div key={tx.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.85rem 1rem", borderRadius: "8px", background: isPositive ? "#f0fff4" : "#fff5f5", border: `1px solid ${isPositive ? "#b2f2bb" : "#ffc9c9"}` }}>
+                          <div
+                            key={tx.id}
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              padding: "0.85rem 1rem",
+                              borderRadius: "8px",
+                              background: isPositive ? "#f0fff4" : "#fff5f5",
+                              border: `1px solid ${isPositive ? "#b2f2bb" : "#ffc9c9"}`,
+                            }}
+                          >
                             <div>
-                              <div style={{ fontWeight: 600, fontSize: "0.9rem", color: isPositive ? "#2b8a3e" : "#c92a2a" }}>
-                                {tx.type === "Recharge" ? "💰" : tx.type === "Received" ? "✅" : "💳"} {tx.type}
+                              <div
+                                style={{
+                                  fontWeight: 600,
+                                  fontSize: "0.9rem",
+                                  color: isPositive ? "#2b8a3e" : "#c92a2a",
+                                }}
+                              >
+                                {tx.type === "Recharge"
+                                  ? ""
+                                  : tx.type === "Received"
+                                    ? ""
+                                    : ""}{" "}
+                                {tx.type}
                               </div>
-                              <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: "2px" }}>{tx.description}</div>
-                              <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "2px" }}>{new Date(tx.created_at).toLocaleString()}</div>
+                              <div
+                                style={{
+                                  fontSize: "0.8rem",
+                                  color: "var(--text-muted)",
+                                  marginTop: "2px",
+                                }}
+                              >
+                                {tx.description}
+                              </div>
+                              <div
+                                style={{
+                                  fontSize: "0.75rem",
+                                  color: "var(--text-muted)",
+                                  marginTop: "2px",
+                                }}
+                              >
+                                {new Date(tx.created_at).toLocaleString()}
+                              </div>
                             </div>
-                            <div style={{ fontWeight: 800, fontSize: "1.1rem", color: isPositive ? "#2b8a3e" : "#c92a2a" }}>
-                              {isPositive ? "+" : ""}{Number(tx.amount).toFixed(2)}
+                            <div
+                              style={{
+                                fontWeight: 800,
+                                fontSize: "1.1rem",
+                                color: isPositive ? "#2b8a3e" : "#c92a2a",
+                              }}
+                            >
+                              {isPositive ? "+" : ""}
+                              {Number(tx.amount).toFixed(2)}
                             </div>
                           </div>
                         );
@@ -3128,37 +3729,112 @@ export default function EmployeeDashboard() {
         {/* ========== PAYMENT TAB ========== */}
         {activeTab === "payment" && (
           <div>
-            <h3 style={{ marginBottom: "1.5rem", color: "var(--odoo-violet)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              <ReceiptText size={24} /> Payments
+            <h3
+              style={{
+                marginBottom: "1.5rem",
+                color: "var(--odoo-violet)",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+              }}
+            >
+              <></> Payments
             </h3>
 
             <div style={{ display: "flex", gap: "2rem", flexWrap: "wrap" }}>
               {/* Unpaid Bookings List */}
               <div style={{ flex: "1 1 340px" }}>
-                <div style={{ background: "white", border: "1px solid var(--border-color)", borderRadius: "12px", padding: "1.5rem" }}>
-                  <h5 style={{ marginBottom: "1rem", fontWeight: 700, color: "#495057" }}>Rides Awaiting Payment</h5>
+                <div
+                  style={{
+                    background: "white",
+                    border: "1px solid var(--border-color)",
+                    borderRadius: "12px",
+                    padding: "1.5rem",
+                  }}
+                >
+                  <h5
+                    style={{
+                      marginBottom: "1rem",
+                      fontWeight: 700,
+                      color: "#495057",
+                    }}
+                  >
+                    Rides Awaiting Payment
+                  </h5>
                   {unpaidBookings.length === 0 ? (
                     <div style={{ textAlign: "center", padding: "2rem" }}>
-                      <CheckCircle2 size={40} color="#2b8a3e" style={{ margin: "0 auto 1rem" }} />
-                      <p style={{ color: "var(--text-muted)" }}>All your rides are paid up! 🎉</p>
+                      <></>
+                      <p style={{ color: "var(--text-muted)" }}>
+                        All your rides are paid up!{" "}
+                      </p>
                     </div>
                   ) : (
-                    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                      {unpaidBookings.map(b => (
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "0.75rem",
+                      }}
+                    >
+                      {unpaidBookings.map((b) => (
                         <div
                           key={b.booking_id}
                           onClick={() => setSelectedPayBooking(b)}
-                          style={{ padding: "1rem", borderRadius: "10px", border: `2px solid ${selectedPayBooking?.booking_id === b.booking_id ? "var(--odoo-violet)" : "var(--border-color)"}`, background: selectedPayBooking?.booking_id === b.booking_id ? "#f3f0ff" : "#fafafa", cursor: "pointer", transition: "all 0.2s" }}
+                          style={{
+                            padding: "1rem",
+                            borderRadius: "10px",
+                            border: `2px solid ${selectedPayBooking?.booking_id === b.booking_id ? "var(--odoo-violet)" : "var(--border-color)"}`,
+                            background:
+                              selectedPayBooking?.booking_id === b.booking_id
+                                ? "#f3f0ff"
+                                : "#fafafa",
+                            cursor: "pointer",
+                            transition: "all 0.2s",
+                          }}
                         >
-                          <div style={{ fontWeight: 700, color: "var(--odoo-violet)", fontSize: "0.95rem" }}>
+                          <div
+                            style={{
+                              fontWeight: 700,
+                              color: "var(--odoo-violet)",
+                              fontSize: "0.95rem",
+                            }}
+                          >
                             {b.pickup_location} → {b.destination}
                           </div>
-                          <div style={{ fontSize: "0.82rem", color: "var(--text-muted)", marginTop: "4px" }}>
-                            Driver: {b.driver_name} • {new Date(b.departure_date).toLocaleDateString()}
+                          <div
+                            style={{
+                              fontSize: "0.82rem",
+                              color: "var(--text-muted)",
+                              marginTop: "4px",
+                            }}
+                          >
+                            Driver: {b.driver_name} •{" "}
+                            {new Date(b.departure_date).toLocaleDateString()}
                           </div>
-                          <div style={{ display: "flex", justifyContent: "space-between", marginTop: "8px" }}>
-                            <span style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>{b.seats_booked} seat(s)</span>
-                            <span style={{ fontWeight: 800, color: "var(--odoo-teal)", fontSize: "1rem" }}>${Number(b.fare).toFixed(2)}</span>
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              marginTop: "8px",
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontSize: "0.82rem",
+                                color: "var(--text-muted)",
+                              }}
+                            >
+                              {b.seats_booked} seat(s)
+                            </span>
+                            <span
+                              style={{
+                                fontWeight: 800,
+                                color: "var(--odoo-teal)",
+                                fontSize: "1rem",
+                              }}
+                            >
+                              ${Number(b.fare).toFixed(2)}
+                            </span>
                           </div>
                         </div>
                       ))}
@@ -3170,43 +3846,154 @@ export default function EmployeeDashboard() {
               {/* Payment Checkout */}
               <div style={{ flex: "1 1 340px" }}>
                 {selectedPayBooking ? (
-                  <div style={{ background: "white", border: "1px solid var(--border-color)", borderRadius: "12px", padding: "1.5rem" }}>
-                    <h5 style={{ marginBottom: "1.25rem", fontWeight: 700, color: "var(--odoo-violet)" }}>Checkout</h5>
+                  <div
+                    style={{
+                      background: "white",
+                      border: "1px solid var(--border-color)",
+                      borderRadius: "12px",
+                      padding: "1.5rem",
+                    }}
+                  >
+                    <h5
+                      style={{
+                        marginBottom: "1.25rem",
+                        fontWeight: 700,
+                        color: "var(--odoo-violet)",
+                      }}
+                    >
+                      Checkout
+                    </h5>
 
                     {/* Selected ride summary */}
-                    <div style={{ background: "#f8f9fa", borderRadius: "10px", padding: "1rem", marginBottom: "1.25rem", borderLeft: "4px solid var(--odoo-violet)" }}>
-                      <div style={{ fontWeight: 700 }}>{selectedPayBooking.pickup_location} → {selectedPayBooking.destination}</div>
-                      <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "4px" }}>Driver: {selectedPayBooking.driver_name}</div>
-                      <div style={{ display: "flex", justifyContent: "space-between", marginTop: "8px", fontWeight: 800 }}>
+                    <div
+                      style={{
+                        background: "#f8f9fa",
+                        borderRadius: "10px",
+                        padding: "1rem",
+                        marginBottom: "1.25rem",
+                        borderLeft: "4px solid var(--odoo-violet)",
+                      }}
+                    >
+                      <div style={{ fontWeight: 700 }}>
+                        {selectedPayBooking.pickup_location} →{" "}
+                        {selectedPayBooking.destination}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: "0.85rem",
+                          color: "var(--text-muted)",
+                          marginTop: "4px",
+                        }}
+                      >
+                        Driver: {selectedPayBooking.driver_name}
+                      </div>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          marginTop: "8px",
+                          fontWeight: 800,
+                        }}
+                      >
                         <span>Amount Due</span>
-                        <span style={{ color: "var(--odoo-teal)", fontSize: "1.2rem" }}>${Number(selectedPayBooking.fare).toFixed(2)}</span>
+                        <span
+                          style={{
+                            color: "var(--odoo-teal)",
+                            fontSize: "1.2rem",
+                          }}
+                        >
+                          ${Number(selectedPayBooking.fare).toFixed(2)}
+                        </span>
                       </div>
                     </div>
 
                     {/* Payment Method */}
-                    <label style={{ fontWeight: 600, marginBottom: "0.5rem", display: "block" }}>Select Payment Method</label>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.6rem", marginBottom: "1.25rem" }}>
-                      {["Cash", "Card", "UPI", "Wallet"].map(m => (
+                    <label
+                      style={{
+                        fontWeight: 600,
+                        marginBottom: "0.5rem",
+                        display: "block",
+                      }}
+                    >
+                      Select Payment Method
+                    </label>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr",
+                        gap: "0.6rem",
+                        marginBottom: "1.25rem",
+                      }}
+                    >
+                      {["Cash", "Card", "UPI", "Wallet"].map((m) => (
                         <button
                           key={m}
                           onClick={() => setPaymentMethod(m)}
-                          style={{ padding: "0.75rem", borderRadius: "10px", border: `2px solid ${paymentMethod === m ? "var(--odoo-violet)" : "var(--border-color)"}`, background: paymentMethod === m ? "#f3f0ff" : "white", fontWeight: 600, color: paymentMethod === m ? "var(--odoo-violet)" : "#495057", cursor: "pointer", transition: "all 0.15s", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.4rem" }}
+                          style={{
+                            padding: "0.75rem",
+                            borderRadius: "10px",
+                            border: `2px solid ${paymentMethod === m ? "var(--odoo-violet)" : "var(--border-color)"}`,
+                            background:
+                              paymentMethod === m ? "#f3f0ff" : "white",
+                            fontWeight: 600,
+                            color:
+                              paymentMethod === m
+                                ? "var(--odoo-violet)"
+                                : "#495057",
+                            cursor: "pointer",
+                            transition: "all 0.15s",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: "0.4rem",
+                          }}
                         >
-                          {m === "Cash" && "💵"}{m === "Card" && "💳"}{m === "UPI" && "📱"}{m === "Wallet" && "👛"} {m}
+                          {m === "Cash" && ""}
+                          {m === "Card" && ""}
+                          {m === "UPI" && ""}
+                          {m === "Wallet" && ""} {m}
                         </button>
                       ))}
                     </div>
 
                     {/* Wallet balance info */}
                     {paymentMethod === "Wallet" && (
-                      <div style={{ marginBottom: "1rem", padding: "0.75rem 1rem", borderRadius: "8px", background: walletBalance >= Number(selectedPayBooking.fare) ? "#f0fff4" : "#fff5f5", border: `1px solid ${walletBalance >= Number(selectedPayBooking.fare) ? "#b2f2bb" : "#ffc9c9"}`, fontSize: "0.88rem" }}>
-                        <div style={{ fontWeight: 600, color: walletBalance >= Number(selectedPayBooking.fare) ? "#2b8a3e" : "#c92a2a" }}>
+                      <div
+                        style={{
+                          marginBottom: "1rem",
+                          padding: "0.75rem 1rem",
+                          borderRadius: "8px",
+                          background:
+                            walletBalance >= Number(selectedPayBooking.fare)
+                              ? "#f0fff4"
+                              : "#fff5f5",
+                          border: `1px solid ${walletBalance >= Number(selectedPayBooking.fare) ? "#b2f2bb" : "#ffc9c9"}`,
+                          fontSize: "0.88rem",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontWeight: 600,
+                            color:
+                              walletBalance >= Number(selectedPayBooking.fare)
+                                ? "#2b8a3e"
+                                : "#c92a2a",
+                          }}
+                        >
                           {walletBalance >= Number(selectedPayBooking.fare)
-                            ? `✅ Sufficient balance ($${walletBalance.toFixed(2)} available)`
-                            : `❌ Insufficient balance ($${walletBalance.toFixed(2)} available, need $${Number(selectedPayBooking.fare).toFixed(2)})`}
+                            ? ` Sufficient balance ($${walletBalance.toFixed(2)} available)`
+                            : ` Insufficient balance ($${walletBalance.toFixed(2)} available, need $${Number(selectedPayBooking.fare).toFixed(2)})`}
                         </div>
                         {walletBalance < Number(selectedPayBooking.fare) && (
-                          <button className="btn btn-outline" style={{ marginTop: "0.5rem", fontSize: "0.8rem", padding: "0.35rem 0.75rem" }} onClick={() => setActiveTab("wallet")}>
+                          <button
+                            className="btn btn-outline"
+                            style={{
+                              marginTop: "0.5rem",
+                              fontSize: "0.8rem",
+                              padding: "0.35rem 0.75rem",
+                            }}
+                            onClick={() => setActiveTab("wallet")}
+                          >
                             Top up wallet →
                           </button>
                         )}
@@ -3215,26 +4002,81 @@ export default function EmployeeDashboard() {
 
                     <button
                       className="btn btn-primary"
-                      style={{ width: "100%", padding: "0.85rem", borderRadius: "10px", fontWeight: 700, fontSize: "1rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}
+                      style={{
+                        width: "100%",
+                        padding: "0.85rem",
+                        borderRadius: "10px",
+                        fontWeight: 700,
+                        fontSize: "1rem",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "0.5rem",
+                      }}
                       onClick={handlePayBooking}
-                      disabled={paymentLoading || (paymentMethod === "Wallet" && walletBalance < Number(selectedPayBooking.fare))}
+                      disabled={
+                        paymentLoading ||
+                        (paymentMethod === "Wallet" &&
+                          walletBalance < Number(selectedPayBooking.fare))
+                      }
                     >
-                      <CreditCard size={18} /> {paymentLoading ? "Processing..." : `Pay $${Number(selectedPayBooking.fare).toFixed(2)} via ${paymentMethod}`}
+                      <></>{" "}
+                      {paymentLoading
+                        ? "Processing..."
+                        : `Pay $${Number(selectedPayBooking.fare).toFixed(2)} via ${paymentMethod}`}
                     </button>
-                    <button className="btn btn-outline" style={{ width: "100%", marginTop: "0.5rem", padding: "0.6rem" }} onClick={() => setSelectedPayBooking(null)}>
+                    <button
+                      className="btn btn-outline"
+                      style={{
+                        width: "100%",
+                        marginTop: "0.5rem",
+                        padding: "0.6rem",
+                      }}
+                      onClick={() => setSelectedPayBooking(null)}
+                    >
                       Cancel
                     </button>
                   </div>
                 ) : (
-                  <div style={{ background: "#f8f9fa", borderRadius: "12px", padding: "3rem 2rem", textAlign: "center" }}>
-                    <CreditCard size={48} color="var(--text-muted)" style={{ margin: "0 auto 1rem", opacity: 0.5 }} />
-                    <h5 style={{ color: "var(--text-muted)" }}>Select a ride to pay</h5>
-                    <p style={{ fontSize: "0.88rem", color: "var(--text-muted)", marginTop: "0.5rem" }}>Click on a ride from the list on the left to proceed with payment.</p>
+                  <div
+                    style={{
+                      background: "#f8f9fa",
+                      borderRadius: "12px",
+                      padding: "3rem 2rem",
+                      textAlign: "center",
+                    }}
+                  >
+                    <></>
+                    <h5 style={{ color: "var(--text-muted)" }}>
+                      Select a ride to pay
+                    </h5>
+                    <p
+                      style={{
+                        fontSize: "0.88rem",
+                        color: "var(--text-muted)",
+                        marginTop: "0.5rem",
+                      }}
+                    >
+                      Click on a ride from the list on the left to proceed with
+                      payment.
+                    </p>
 
                     {/* Wallet Balance Mini-Widget */}
-                    <div style={{ marginTop: "1.5rem", padding: "1rem", background: "linear-gradient(135deg, #6c5ce7, #a29bfe)", borderRadius: "10px", color: "white" }}>
-                      <div style={{ fontSize: "0.8rem", opacity: 0.85 }}>Your Wallet Balance</div>
-                      <div style={{ fontSize: "1.6rem", fontWeight: 800 }}>${walletBalance.toFixed(2)}</div>
+                    <div
+                      style={{
+                        marginTop: "1.5rem",
+                        padding: "1rem",
+                        background: "linear-gradient(135deg, #6c5ce7, #a29bfe)",
+                        borderRadius: "10px",
+                        color: "white",
+                      }}
+                    >
+                      <div style={{ fontSize: "0.8rem", opacity: 0.85 }}>
+                        Your Wallet Balance
+                      </div>
+                      <div style={{ fontSize: "1.6rem", fontWeight: 800 }}>
+                        ${walletBalance.toFixed(2)}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -3270,7 +4112,7 @@ export default function EmployeeDashboard() {
                 padding: "1.5rem",
                 boxShadow: "-4px 0 20px rgba(0,0,0,0.15)",
                 boxSizing: "border-box",
-                background: "#f0f2f5"
+                background: "#f0f2f5",
               }}
             >
               {/* Header */}
@@ -3284,42 +4126,82 @@ export default function EmployeeDashboard() {
                   marginBottom: "1rem",
                 }}
               >
-                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <div
+                  style={{ display: "flex", alignItems: "center", gap: "10px" }}
+                >
                   <div
                     style={{
                       width: "40px",
                       height: "40px",
                       borderRadius: "50%",
-                      background: "var(--odoo-violet)",
+                      background: "var(--odoo-teal)",
                       color: "white",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
                       fontWeight: 700,
-                      fontSize: "1.1rem"
+                      fontSize: "1.1rem",
                     }}
                   >
                     {activeChat.peer_name.charAt(0).toUpperCase()}
                   </div>
                   <div>
-                    <h4 style={{ margin: 0, color: "var(--odoo-violet)", fontSize: "1.1rem", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <h4
+                      style={{
+                        margin: 0,
+                        color: "var(--odoo-violet)",
+                        fontSize: "1.1rem",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                      }}
+                    >
                       {activeChat.peer_name}
-                      <span style={{ fontSize: "0.75rem", padding: "2px 6px", borderRadius: "10px", background: "#e9ecef", color: "#495057", fontWeight: 500 }}>
+                      <span
+                        style={{
+                          fontSize: "0.75rem",
+                          padding: "2px 6px",
+                          borderRadius: "10px",
+                          background: "#e9ecef",
+                          color: "#495057",
+                          fontWeight: 500,
+                        }}
+                      >
                         {activeChat.peer_role}
                       </span>
                     </h4>
-                    <div style={{ display: "flex", alignItems: "center", gap: "5px", marginTop: "3px" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "5px",
+                        marginTop: "3px",
+                      }}
+                    >
                       <span
                         style={{
                           width: "8px",
                           height: "8px",
-                          background: peerOnlineStatus === "Online" ? "#2b8a3e" : "#adb5bd",
+                          background:
+                            peerOnlineStatus === "Online"
+                              ? "#2b8a3e"
+                              : "#adb5bd",
                           borderRadius: "50%",
                           display: "inline-block",
                         }}
                       ></span>
-                      <span style={{ fontSize: "0.78rem", color: "var(--text-muted)", fontWeight: 500 }}>
-                        {peerOnlineStatus === "Online" ? "Online" : peerLastSeen ? `Offline • Last seen ${peerLastSeen}` : "Offline"}
+                      <span
+                        style={{
+                          fontSize: "0.78rem",
+                          color: "var(--text-muted)",
+                          fontWeight: 500,
+                        }}
+                      >
+                        {peerOnlineStatus === "Online"
+                          ? "Online"
+                          : peerLastSeen
+                            ? `Offline • Last seen ${peerLastSeen}`
+                            : "Offline"}
                       </span>
                     </div>
                   </div>
@@ -3339,7 +4221,8 @@ export default function EmployeeDashboard() {
                   flex: 1,
                   overflowY: "auto",
                   background: "#efeae2", // WhatsApp chat background style
-                  backgroundImage: "radial-gradient(rgba(0,0,0,0.08) 1px, transparent 0)",
+                  backgroundImage:
+                    "radial-gradient(rgba(0,0,0,0.08) 1px, transparent 0)",
                   backgroundSize: "20px 20px",
                   borderRadius: "8px",
                   border: "1px solid var(--border-color)",
@@ -3360,14 +4243,17 @@ export default function EmployeeDashboard() {
                       background: "white",
                       padding: "1rem",
                       borderRadius: "8px",
-                      boxShadow: "0 1px 2px rgba(0,0,0,0.05)"
+                      boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
                     }}
                   >
-                    🔒 Messages are end-to-end persistent and secure. Start messaging below.
+                    Messages are end-to-end persistent and secure. Start
+                    messaging below.
                   </div>
                 ) : (
                   chatMessages.map((msg) => {
-                    const isMe = String(msg.senderId) === String(user.id) || msg.senderName === "You";
+                    const isMe =
+                      String(msg.senderId) === String(user.id) ||
+                      msg.senderName === "You";
                     return (
                       <div
                         key={msg.id}
@@ -3390,11 +4276,25 @@ export default function EmployeeDashboard() {
                           }}
                         >
                           {!isMe && (
-                            <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--odoo-violet)", marginBottom: "3px" }}>
+                            <span
+                              style={{
+                                fontSize: "0.75rem",
+                                fontWeight: 700,
+                                color: "var(--odoo-violet)",
+                                marginBottom: "3px",
+                              }}
+                            >
                               {msg.senderName}
                             </span>
                           )}
-                          <span style={{ fontSize: "0.92rem", wordBreak: "break-word" }}>{msg.message}</span>
+                          <span
+                            style={{
+                              fontSize: "0.92rem",
+                              wordBreak: "break-word",
+                            }}
+                          >
+                            {msg.message}
+                          </span>
                           <span
                             style={{
                               fontSize: "0.68rem",
@@ -3403,18 +4303,18 @@ export default function EmployeeDashboard() {
                               marginTop: "4px",
                               display: "inline-flex",
                               alignItems: "center",
-                              gap: "3px"
+                              gap: "3px",
                             }}
                           >
                             {msg.timestamp}
                             {isMe && (
                               <span>
                                 {msg.status === "Read" ? (
-                                  <CheckCheck size={14} color="#53bdeb" />
+                                  <></>
                                 ) : msg.status === "Delivered" ? (
-                                  <CheckCheck size={14} color="#8696a0" />
+                                  <></>
                                 ) : (
-                                  <Check size={14} color="#8696a0" />
+                                  <></>
                                 )}
                               </span>
                             )}
@@ -3440,11 +4340,13 @@ export default function EmployeeDashboard() {
                         fontStyle: "italic",
                         display: "flex",
                         alignItems: "center",
-                        gap: "6px"
+                        gap: "6px",
                       }}
                     >
                       <span className="typing-dots">
-                        <span>.</span><span>.</span><span>.</span>
+                        <span>.</span>
+                        <span>.</span>
+                        <span>.</span>
                       </span>
                       {activeChat.peer_name} is typing
                     </div>
@@ -3456,9 +4358,22 @@ export default function EmployeeDashboard() {
               </div>
 
               {/* Read Only Notice if Completed or Cancelled */}
-              {(activeChat.ride_status === "Completed" || activeChat.ride_status === "Cancelled") && (
-                <div style={{ background: "#e9ecef", color: "#495057", padding: "0.65rem 1rem", borderRadius: "8px", fontSize: "0.85rem", textAlign: "center", marginBottom: "0.85rem", fontWeight: 600 }}>
-                  🔒 This ride is {activeChat.ride_status.toLowerCase()}. Conversation is archived.
+              {(activeChat.ride_status === "Completed" ||
+                activeChat.ride_status === "Cancelled") && (
+                <div
+                  style={{
+                    background: "#e9ecef",
+                    color: "#495057",
+                    padding: "0.65rem 1rem",
+                    borderRadius: "8px",
+                    fontSize: "0.85rem",
+                    textAlign: "center",
+                    marginBottom: "0.85rem",
+                    fontWeight: 600,
+                  }}
+                >
+                  This ride is {activeChat.ride_status.toLowerCase()}.
+                  Conversation is archived.
                 </div>
               )}
 
@@ -3474,14 +4389,31 @@ export default function EmployeeDashboard() {
                     placeholder="Type a message..."
                     value={newMessage}
                     onChange={handleInputChange}
-                    disabled={activeChat.ride_status === "Completed" || activeChat.ride_status === "Cancelled"}
-                    style={{ borderRadius: "20px", padding: "0.6rem 1rem", background: "white", border: "1px solid #e9ecef" }}
+                    disabled={
+                      activeChat.ride_status === "Completed" ||
+                      activeChat.ride_status === "Cancelled"
+                    }
+                    style={{
+                      borderRadius: "20px",
+                      padding: "0.6rem 1rem",
+                      background: "white",
+                      border: "1px solid #e9ecef",
+                    }}
                   />
                   <button
                     type="submit"
                     className="btn btn-teal"
-                    disabled={!newMessage.trim() || activeChat.ride_status === "Completed" || activeChat.ride_status === "Cancelled"}
-                    style={{ padding: "0 1.25rem", borderRadius: "20px", background: "var(--odoo-violet)", borderColor: "var(--odoo-violet)" }}
+                    disabled={
+                      !newMessage.trim() ||
+                      activeChat.ride_status === "Completed" ||
+                      activeChat.ride_status === "Cancelled"
+                    }
+                    style={{
+                      padding: "0 1.25rem",
+                      borderRadius: "20px",
+                      background: "var(--odoo-teal)",
+                      borderColor: "var(--odoo-violet)",
+                    }}
                   >
                     Send
                   </button>
@@ -3514,48 +4446,172 @@ export default function EmployeeDashboard() {
                 maxWidth: "90%",
                 padding: "2rem",
                 borderRadius: "12px",
-                background: "white"
+                background: "white",
               }}
             >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
-                <h4 style={{ margin: 0, color: "var(--odoo-violet)" }}>Checkout</h4>
-                <button className="btn btn-outline" style={{ padding: "0.2rem 0.5rem" }} onClick={() => setSelectedPayBooking(null)}>X</button>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "1.5rem",
+                }}
+              >
+                <h4 style={{ margin: 0, color: "var(--odoo-violet)" }}>
+                  Checkout
+                </h4>
+                <button
+                  className="btn btn-outline"
+                  style={{ padding: "0.2rem 0.5rem" }}
+                  onClick={() => setSelectedPayBooking(null)}
+                >
+                  X
+                </button>
               </div>
 
               {/* Selected ride summary */}
-              <div style={{ background: "#f8f9fa", borderRadius: "10px", padding: "1rem", marginBottom: "1.25rem", borderLeft: "4px solid var(--odoo-violet)" }}>
-                <div style={{ fontWeight: 700 }}>{selectedPayBooking.pickup_location || selectedPayBooking.my_pickup_location} → {selectedPayBooking.destination}</div>
-                <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "4px" }}>Driver: {selectedPayBooking.driver_name}</div>
-                <div style={{ display: "flex", justifyContent: "space-between", marginTop: "8px", fontWeight: 800 }}>
+              <div
+                style={{
+                  background: "#f8f9fa",
+                  borderRadius: "10px",
+                  padding: "1rem",
+                  marginBottom: "1.25rem",
+                  borderLeft: "4px solid var(--odoo-violet)",
+                }}
+              >
+                <div style={{ fontWeight: 700 }}>
+                  {selectedPayBooking.pickup_location ||
+                    selectedPayBooking.my_pickup_location}{" "}
+                  → {selectedPayBooking.destination}
+                </div>
+                <div
+                  style={{
+                    fontSize: "0.85rem",
+                    color: "var(--text-muted)",
+                    marginTop: "4px",
+                  }}
+                >
+                  Driver: {selectedPayBooking.driver_name}
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    marginTop: "8px",
+                    fontWeight: 800,
+                  }}
+                >
                   <span>Amount Due</span>
-                  <span style={{ color: "var(--odoo-teal)", fontSize: "1.2rem" }}>${Number(selectedPayBooking.fare || selectedPayBooking.my_fare).toFixed(2)}</span>
+                  <span
+                    style={{ color: "var(--odoo-teal)", fontSize: "1.2rem" }}
+                  >
+                    $
+                    {Number(
+                      selectedPayBooking.fare || selectedPayBooking.my_fare,
+                    ).toFixed(2)}
+                  </span>
                 </div>
               </div>
 
               {/* Payment Method */}
-              <label style={{ fontWeight: 600, marginBottom: "0.5rem", display: "block" }}>Select Payment Method</label>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.6rem", marginBottom: "1.25rem" }}>
-                {["Cash", "Card", "UPI", "Wallet"].map(m => (
+              <label
+                style={{
+                  fontWeight: 600,
+                  marginBottom: "0.5rem",
+                  display: "block",
+                }}
+              >
+                Select Payment Method
+              </label>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "0.6rem",
+                  marginBottom: "1.25rem",
+                }}
+              >
+                {["Cash", "Card", "UPI", "Wallet"].map((m) => (
                   <button
                     key={m}
                     onClick={() => setPaymentMethod(m)}
-                    style={{ padding: "0.75rem", borderRadius: "10px", border: `2px solid ${paymentMethod === m ? "var(--odoo-violet)" : "var(--border-color)"}`, background: paymentMethod === m ? "#f3f0ff" : "white", fontWeight: 600, color: paymentMethod === m ? "var(--odoo-violet)" : "#495057", cursor: "pointer", transition: "all 0.15s", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.4rem" }}
+                    style={{
+                      padding: "0.75rem",
+                      borderRadius: "10px",
+                      border: `2px solid ${paymentMethod === m ? "var(--odoo-violet)" : "var(--border-color)"}`,
+                      background: paymentMethod === m ? "#f3f0ff" : "white",
+                      fontWeight: 600,
+                      color:
+                        paymentMethod === m ? "var(--odoo-violet)" : "#495057",
+                      cursor: "pointer",
+                      transition: "all 0.15s",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "0.4rem",
+                    }}
                   >
-                    {m === "Cash" && "💵"}{m === "Card" && "💳"}{m === "UPI" && "📱"}{m === "Wallet" && "👛"} {m}
+                    {m === "Cash" && ""}
+                    {m === "Card" && ""}
+                    {m === "UPI" && ""}
+                    {m === "Wallet" && ""} {m}
                   </button>
                 ))}
               </div>
 
               {/* Wallet balance info */}
               {paymentMethod === "Wallet" && (
-                <div style={{ marginBottom: "1rem", padding: "0.75rem 1rem", borderRadius: "8px", background: walletBalance >= Number(selectedPayBooking.fare || selectedPayBooking.my_fare) ? "#f0fff4" : "#fff5f5", border: `1px solid ${walletBalance >= Number(selectedPayBooking.fare || selectedPayBooking.my_fare) ? "#b2f2bb" : "#ffc9c9"}`, fontSize: "0.88rem" }}>
-                  <div style={{ fontWeight: 600, color: walletBalance >= Number(selectedPayBooking.fare || selectedPayBooking.my_fare) ? "#2b8a3e" : "#c92a2a" }}>
-                    {walletBalance >= Number(selectedPayBooking.fare || selectedPayBooking.my_fare)
-                      ? `✅ Sufficient balance ($${walletBalance.toFixed(2)} available)`
-                      : `❌ Insufficient balance ($${walletBalance.toFixed(2)} available, need $${Number(selectedPayBooking.fare || selectedPayBooking.my_fare).toFixed(2)})`}
+                <div
+                  style={{
+                    marginBottom: "1rem",
+                    padding: "0.75rem 1rem",
+                    borderRadius: "8px",
+                    background:
+                      walletBalance >=
+                      Number(
+                        selectedPayBooking.fare || selectedPayBooking.my_fare,
+                      )
+                        ? "#f0fff4"
+                        : "#fff5f5",
+                    border: `1px solid ${walletBalance >= Number(selectedPayBooking.fare || selectedPayBooking.my_fare) ? "#b2f2bb" : "#ffc9c9"}`,
+                    fontSize: "0.88rem",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontWeight: 600,
+                      color:
+                        walletBalance >=
+                        Number(
+                          selectedPayBooking.fare || selectedPayBooking.my_fare,
+                        )
+                          ? "#2b8a3e"
+                          : "#c92a2a",
+                    }}
+                  >
+                    {walletBalance >=
+                    Number(
+                      selectedPayBooking.fare || selectedPayBooking.my_fare,
+                    )
+                      ? ` Sufficient balance ($${walletBalance.toFixed(2)} available)`
+                      : ` Insufficient balance ($${walletBalance.toFixed(2)} available, need $${Number(selectedPayBooking.fare || selectedPayBooking.my_fare).toFixed(2)})`}
                   </div>
-                  {walletBalance < Number(selectedPayBooking.fare || selectedPayBooking.my_fare) && (
-                    <button className="btn btn-outline" style={{ marginTop: "0.5rem", fontSize: "0.8rem", padding: "0.35rem 0.75rem" }} onClick={() => { setActiveTab("wallet"); setSelectedPayBooking(null); }}>
+                  {walletBalance <
+                    Number(
+                      selectedPayBooking.fare || selectedPayBooking.my_fare,
+                    ) && (
+                    <button
+                      className="btn btn-outline"
+                      style={{
+                        marginTop: "0.5rem",
+                        fontSize: "0.8rem",
+                        padding: "0.35rem 0.75rem",
+                      }}
+                      onClick={() => {
+                        setActiveTab("wallet");
+                        setSelectedPayBooking(null);
+                      }}
+                    >
                       Top up wallet →
                     </button>
                   )}
@@ -3564,12 +4620,25 @@ export default function EmployeeDashboard() {
 
               <button
                 className="btn btn-primary"
-                style={{ width: "100%", padding: "0.85rem", borderRadius: "10px", fontWeight: 700, fontSize: "1rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}
+                style={{
+                  width: "100%",
+                  padding: "0.85rem",
+                  borderRadius: "10px",
+                  fontWeight: 700,
+                  fontSize: "1rem",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "0.5rem",
+                }}
                 onClick={async () => {
                   setPaymentLoading(true);
                   try {
-                    const res = await payBooking(selectedPayBooking.booking_id, paymentMethod);
-                    showMsg(`✅ ${res.message}`);
+                    const res = await payBooking(
+                      selectedPayBooking.booking_id,
+                      paymentMethod,
+                    );
+                    showMsg(` ${res.message}`);
                     setSelectedPayBooking(null);
                     loadHistory();
                     loadUnpaidBookings();
@@ -3580,11 +4649,29 @@ export default function EmployeeDashboard() {
                     setPaymentLoading(false);
                   }
                 }}
-                disabled={paymentLoading || (paymentMethod === "Wallet" && walletBalance < Number(selectedPayBooking.fare || selectedPayBooking.my_fare))}
+                disabled={
+                  paymentLoading ||
+                  (paymentMethod === "Wallet" &&
+                    walletBalance <
+                      Number(
+                        selectedPayBooking.fare || selectedPayBooking.my_fare,
+                      ))
+                }
               >
-                <CreditCard size={18} /> {paymentLoading ? "Processing..." : `Pay $${Number(selectedPayBooking.fare || selectedPayBooking.my_fare).toFixed(2)} via ${paymentMethod}`}
+                <></>{" "}
+                {paymentLoading
+                  ? "Processing..."
+                  : `Pay $${Number(selectedPayBooking.fare || selectedPayBooking.my_fare).toFixed(2)} via ${paymentMethod}`}
               </button>
-              <button className="btn btn-outline" style={{ width: "100%", marginTop: "0.5rem", padding: "0.6rem" }} onClick={() => setSelectedPayBooking(null)}>
+              <button
+                className="btn btn-outline"
+                style={{
+                  width: "100%",
+                  marginTop: "0.5rem",
+                  padding: "0.6rem",
+                }}
+                onClick={() => setSelectedPayBooking(null)}
+              >
                 Cancel
               </button>
             </div>

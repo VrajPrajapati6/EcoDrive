@@ -1,9 +1,13 @@
 const express = require('express');
 const router = express.Router();
-const { offerRide, searchRides, bookRide, getRideHistory, completeOrDeleteRide, updateBookingStatus, startRide, getBookingMessages } = require('../controllers/rideController');
+const { offerRide, searchRides, bookRide, getRideHistory, completeOrDeleteRide, updateBookingStatus, startRide, getBookingMessages, createRecurringRequest, getRecurringRequests, acceptRecurringRequest } = require('../controllers/rideController');
 const { authenticateToken } = require('../middleware/authMiddleware');
 
 router.use(authenticateToken);
+
+router.post('/recurring', createRecurringRequest);
+router.get('/recurring', getRecurringRequests);
+router.post('/recurring/:id/accept', acceptRecurringRequest);
 
 router.post('/offer', offerRide);
 router.get('/search', searchRides);
